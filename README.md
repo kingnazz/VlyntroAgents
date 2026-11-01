@@ -117,7 +117,7 @@ git clone --branch codex/agent-hq https://github.com/kingnazz/VlyntroAgents.git 
 cd /opt/vlyntro-agents
 # Create .env.production securely. DATABASE_URL must use postgres as its host.
 docker compose --env-file .env.production build --no-cache
-docker compose --env-file .env.production up -d postgres
+docker compose --env-file .env.production up -d --wait postgres
 docker compose --env-file .env.production run --rm --no-deps api pnpm db:migrate
 docker compose --env-file .env.production run --rm --no-deps api pnpm db:seed
 docker compose --env-file .env.production run --rm --no-deps -it api pnpm admin:create
@@ -127,6 +127,14 @@ curl --fail http://127.0.0.1:3080/api/v1/health
 ```
 
 Use sequential builds on the small VPS: `COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file .env.production build`. Initial schema changes run under a database advisory lock and one transaction. Applied migration checksums are immutable. Add a new migration for every later change.
+
+For a non-interactive bootstrap, keep owner inputs in a separate mode 600 file. The one-shot override passes them only to the administrative container:
+
+```sh
+docker compose --env-file .env.production --env-file /root/.config/vlyntro/bootstrap.env -f compose.yaml -f compose.admin.yaml run --rm --no-deps api node node_modules/tsx/dist/cli.mjs scripts/admin.ts
+```
+
+Do not use `compose.admin.yaml` for normal service startup. Remove the temporary server bootstrap file after verification and retain credentials in the owner's protected secret store.
 
 Install the separate `infra/nginx.conf` virtual host only after reviewing existing services and running `nginx -t`. This HTTP host serves ACME challenges and redirects to HTTPS; it does not accept cleartext login. When DNS points at the server, run `ACME_EMAIL=nazar@vlyntro.com bash scripts/enable-tls.sh`. The script creates only the Agent HQ TLS host and a renewal reload hook, validates Nginx and reloads it without stopping other sites.
 

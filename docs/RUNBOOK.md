@@ -32,6 +32,8 @@ dc() { docker compose --env-file .env.production "$@"; }
 
 Keep `.env.production` mode 600. Do not run `docker compose config` into a transcript because it expands secrets. Do not print container environments or database URLs. Model or provider-key changes require `dc up -d --force-recreate api worker`; restart alone does not reload an env file.
 
+For one-shot owner creation or production acceptance, combine a separate protected bootstrap env file with `compose.admin.yaml`. Use that override only with `run --rm`, then remove the server bootstrap file after the acceptance checks. The normal API and worker environment must not retain the owner password.
+
 ## Roll back
 
 Use an existing reviewed previous commit and its immutable image tag. Recreate only app services against compatible migrations. Database migrations are forward-only and checked. If a schema rollback is needed, stop Agent HQ writers, restore a backup to a new database, verify it, and plan a DATABASE_URL cutover. Never restore over the active data volume. Keep the failed release available for diagnosis and do not reset unrelated work.

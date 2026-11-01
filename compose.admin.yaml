@@ -1,0 +1,7 @@
+services:
+  api:
+    environment:
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Provide a protected bootstrap env file}
+      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-Nazar}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Provide a protected bootstrap env file}
+      ACCEPTANCE_OUTPUT: /data/artifacts/acceptance-result.json
