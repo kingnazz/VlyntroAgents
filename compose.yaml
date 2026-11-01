@@ -80,7 +80,7 @@ services:
     cap_drop: [ALL]
     logging: *logging
   web:
-    image: vlyntro-hq-web:${IMAGE_TAG:-local}
+    image: vlyntro-hq-web:${WEB_IMAGE_TAG:-${IMAGE_TAG:-local}}
     build: { context: ., target: web }
     restart: unless-stopped
     environment:

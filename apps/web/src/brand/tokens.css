@@ -1,0 +1,38 @@
+:root {
+  color-scheme: light;
+  --vx-paper: #faf6f0;
+  --vx-sand: #f2ece2;
+  --vx-card: #fffdf9;
+  --vx-ink: #2a2a2a;
+  --vx-coral: #e07856;
+  --vx-sage: #9caf88;
+  --vx-butter: #f2c94c;
+  --vx-sky: #8fbcd4;
+  --vx-muted: rgba(42, 42, 42, 0.78);
+  --vx-line: rgba(42, 42, 42, 0.12);
+  --vx-line-strong: rgba(42, 42, 42, 0.22);
+  --vx-hover: rgba(42, 42, 42, 0.035);
+  --vx-overlay: rgba(42, 42, 42, 0.3);
+  --vx-human-tint: #f7e1d7;
+  --vx-human-ink: #9a3f22;
+  --vx-agent-tint: #e1edf3;
+  --vx-agent-ink: #315c70;
+  --vx-success-tint: #e6ecdd;
+  --vx-success-ink: #425a35;
+  --vx-waiting-tint: #fbf0cc;
+  --vx-waiting-ink: #705914;
+  --vx-error-tint: #f8e5df;
+  --vx-error-ink: #a64333;
+  --vx-inverse-muted: #e9e2d7;
+  --vx-code: #f4efe6;
+  --vx-radius-panel: 24px;
+  --vx-radius-window: 16px;
+  --vx-radius-node: 12px;
+  --vx-radius-pill: 999px;
+  --vx-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --vx-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --vx-shadow:
+    0 1px 0 rgba(42, 42, 42, 0.04), 0 18px 40px -22px rgba(42, 42, 42, 0.28);
+  --vx-shadow-lg:
+    0 1px 0 rgba(42, 42, 42, 0.05), 0 32px 70px -34px rgba(42, 42, 42, 0.38);
+}

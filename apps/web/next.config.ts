@@ -4,6 +4,7 @@ const config: NextConfig = {
   agentRules: false,
   experimental: { cpus: 1 },
   poweredByHeader: false,
+  devIndicators: false,
   async rewrites() {
     const api = process.env.API_INTERNAL_URL ?? 'http://127.0.0.1:4000';
     return [

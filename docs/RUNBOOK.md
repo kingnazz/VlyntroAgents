@@ -34,6 +34,14 @@ Keep `.env.production` mode 600. Do not run `docker compose config` into a trans
 
 For one-shot owner creation or production acceptance, combine a separate protected bootstrap env file with `compose.admin.yaml`. Use that override only with `run --rm`, then remove the server bootstrap file after the acceptance checks. The normal API and worker environment must not retain the owner password.
 
+### Frontend-only releases
+
+For a UI-only change with no API, worker, schema, or dependency changes, keep `IMAGE_TAG` on the existing runtime release and set `WEB_IMAGE_TAG` to the new immutable Git tag in the protected `.env.production` file. The web tag falls back to `IMAGE_TAG` when unset.
+
+Run `COMPOSE_PARALLEL_LIMIT=1 dc build web`, then `dc up -d --no-deps --wait web`. Do not run migrations, seed data, or recreate other services for a frontend release. Verify login, fonts/icons, navigation, messages, approval state, mobile layout, and SSE. Compare API/worker/PostgreSQL container IDs before and after.
+
+For a frontend-only rollback, restore the previous `WEB_IMAGE_TAG` and run `dc up -d --no-deps --wait web`. Keep both web images until the new release is verified.
+
 ## Roll back
 
 Use an existing reviewed previous commit and its immutable image tag. Recreate only app services against compatible migrations. Database migrations are forward-only and checked. If a schema rollback is needed, stop Agent HQ writers, restore a backup to a new database, verify it, and plan a DATABASE_URL cutover. Never restore over the active data volume. Keep the failed release available for diagnosis and do not reset unrelated work.

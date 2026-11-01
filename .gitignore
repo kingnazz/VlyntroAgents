@@ -11,3 +11,5 @@ playwright-report/
 backups/
 data/
 .DS_Store
+.playwright-cli/
+output/playwright/

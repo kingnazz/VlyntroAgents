@@ -1,6 +1,8 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 import { ArrowUpRight, LockKeyhole } from 'lucide-react';
+import { Brand } from './brand/BrandLockup';
+import { Mascot } from './brand/Mascot';
 export default function Login() {
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -33,22 +35,20 @@ export default function Login() {
   return (
     <main className="login-shell">
       <div className="login-brand">
-        <div className="brand-symbol">
-          V<span>.</span>
-        </div>
-        <span>
-          VLYNTRO<span className="muted"> / AGENT HQ</span>
-        </span>
+        <Brand />
       </div>
       <div className="login-panel">
         <div className="eyebrow">
           <LockKeyhole size={14} /> PRIVATE OPERATIONS
         </div>
-        <h1>
-          Your agents.
-          <br />
-          One command center.
-        </h1>
+        <div className="login-welcome">
+          <h1>
+            Your AI team,
+            <br />
+            in one place<span className="heading-dot">.</span>
+          </h1>
+          <Mascot size={76} track={false} />
+        </div>
         <p className="muted">Sign in to your Vlyntro workspace.</p>
         <form onSubmit={submit}>
           <label>
@@ -81,9 +81,7 @@ export default function Login() {
           </button>
         </form>
         <p className="login-note">
-          Access is provisioned by your workspace owner.
-          <br />
-          There is no public registration.
+          Private access. Contact your workspace owner to join.
         </p>
       </div>
       <footer>
