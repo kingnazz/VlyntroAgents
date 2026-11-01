@@ -1,0 +1,5 @@
+{
+  "name": "@hq/db",
+  "private": true,
+  "type": "module"
+}

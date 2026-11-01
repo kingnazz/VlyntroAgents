@@ -1,0 +1,49 @@
+{
+  "name": "vlyntro-agent-hq",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22.14"
+  },
+  "scripts": {
+    "dev": "concurrently -k 'pnpm --filter @hq/api dev' 'pnpm --filter @hq/worker dev' 'pnpm --filter @hq/web dev'",
+    "build": "pnpm --filter @hq/web build && tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit && pnpm --filter @hq/web typecheck",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "db:migrate": "tsx packages/db/src/migrate.ts",
+    "db:seed": "tsx packages/db/src/seed.ts",
+    "admin:create": "tsx scripts/admin.ts",
+    "agent:token:create": "tsx scripts/token.ts create",
+    "agent:token:rotate": "tsx scripts/token.ts rotate",
+    "agent:token:revoke": "tsx scripts/token.ts revoke"
+  },
+  "dependencies": {
+    "@fastify/cookie": "latest",
+    "@fastify/helmet": "latest",
+    "@fastify/rate-limit": "latest",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "argon2": "latest",
+    "dotenv": "latest",
+    "fastify": "5.12.7",
+    "postgres": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "@playwright/test": "latest",
+    "@types/node": "^22.0.0",
+    "concurrently": "latest",
+    "embedded-postgres": "16.4.0-beta.13",
+    "eslint": "latest",
+    "prettier": "latest",
+    "tsx": "latest",
+    "typescript": "6.0.2",
+    "typescript-eslint": "latest",
+    "vitest": "latest"
+  },
+  "type": "module"
+}
