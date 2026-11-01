@@ -417,7 +417,11 @@ export async function buildApp(logging = false) {
           await sql`SELECT 1 FROM agent_permissions WHERE agent_id=${req.actor.id} AND permission='workspace.read'`;
         if (!scope) fail(403, 'scope_required', 'Workspace access required.');
       }
-      return sql`SELECT a.*,(SELECT max(started_at) FROM runs r WHERE r.agent_id=a.id) AS last_activity,(SELECT title FROM tasks t WHERE t.assigned_agent_id=a.id AND t.status='running' LIMIT 1) AS current_task FROM agents a ORDER BY a.created_at,a.slug`;
+      return sql`SELECT a.*,(SELECT max(started_at) FROM runs r WHERE r.agent_id=a.id) AS last_activity,
+       (SELECT title FROM tasks t WHERE t.assigned_agent_id=a.id AND t.status='running'
+        AND (${req.actor.type === 'user'} OR EXISTS(SELECT 1 FROM agent_permissions p WHERE p.agent_id=${req.actor.id} AND p.workspace_id=t.workspace_id AND p.permission='tasks.read'))
+        AND (t.channel_id IS NULL OR NOT EXISTS(SELECT 1 FROM channels c WHERE c.id=t.channel_id AND c.channel_type IN ('private','direct')) OR EXISTS(SELECT 1 FROM channel_members cm WHERE cm.channel_id=t.channel_id AND cm.member_type=${req.actor.type} AND cm.member_id=${req.actor.id})) LIMIT 1) AS current_task
+       FROM agents a ORDER BY a.created_at,a.slug`;
     },
   );
   route(
@@ -437,7 +441,14 @@ export async function buildApp(logging = false) {
         );
       const permissions =
         await sql`SELECT workspace_id,namespace_id,permission FROM agent_permissions WHERE agent_id=${a.id}`;
-      return { ...a, permissions };
+      const recent_messages =
+        await sql`SELECT m.id,m.body,m.sender_type,m.sender_id,m.created_at,m.channel_id,m.metadata,a.display_name AS sender_name
+       FROM messages m JOIN channels c ON c.id=m.channel_id JOIN agents a ON a.id=m.sender_id
+       WHERE m.sender_type='agent' AND m.sender_id=${a.id}
+       AND (${req.actor.type === 'user'} OR EXISTS(SELECT 1 FROM agent_permissions p WHERE p.agent_id=${req.actor.id} AND p.workspace_id=m.workspace_id AND p.permission='messages.read'))
+       AND (c.channel_type NOT IN ('private','direct') OR EXISTS(SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.member_type=${req.actor.type} AND cm.member_id=${req.actor.id}))
+       ORDER BY m.created_at DESC LIMIT 20`;
+      return { ...a, permissions, recent_messages };
     },
   );
   const agentPatch = z

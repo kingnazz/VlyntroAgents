@@ -16,6 +16,7 @@ export type Agent = {
     workspace_id?: string;
     namespace_id?: string;
   }[];
+  recent_messages?: Message[];
 };
 export type Task = {
   id: string;
@@ -68,6 +69,7 @@ export type Artifact = {
 };
 export type Message = {
   id: string;
+  channel_id: string;
   body: string;
   sender_type: string;
   sender_name: string;

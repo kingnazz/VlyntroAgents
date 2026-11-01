@@ -96,6 +96,36 @@ test('private dashboard, live message, navigation and responsive layout', async 
     .fill('Safe browser acceptance task ' + Date.now());
   await page.getByRole('button', { name: 'Create task', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
+  if (process.env.E2E_APPROVAL_ID) {
+    await menu();
+    await page.getByRole('button', { name: 'Approvals', exact: true }).click();
+    const card = page
+      .locator('article.approval-card')
+      .filter({
+        hasText: 'Production acceptance: record internal confirmation',
+      })
+      .first();
+    await expect(card).toBeVisible();
+    const approve = card.getByRole('button', {
+      name: 'Approve this action',
+      exact: true,
+    });
+    if (await approve.isVisible()) {
+      await card
+        .getByLabel('Decision comment')
+        .fill('Verified through the production browser acceptance test.');
+      await approve.click();
+    }
+    await expect(card.locator('.badge')).toHaveText('approved');
+    const first = await context.request.post(
+      '/api/v1/approvals/' + process.env.E2E_APPROVAL_ID + '/approve',
+      {
+        headers: { Origin: process.env.APP_BASE_URL! },
+        data: { comment: 'Idempotent verification' },
+      },
+    );
+    expect(first.status()).toBe(200);
+  }
   await menu();
   await page
     .getByRole('button', { name: 'Command Center', exact: true })

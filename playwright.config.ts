@@ -1,5 +1,6 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
 import { defineConfig, devices } from '@playwright/test';
+config({ path: process.env.E2E_ENV_FILE ?? '.env', quiet: true });
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: false,
@@ -12,6 +13,9 @@ export default defineConfig({
     trace: 'off',
     screenshot: 'off',
     video: 'off',
+    ...(process.env.E2E_ORIGIN
+      ? { extraHTTPHeaders: { Origin: process.env.E2E_ORIGIN } }
+      : {}),
   },
   projects: [
     {

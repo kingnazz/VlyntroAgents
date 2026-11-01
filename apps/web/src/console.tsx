@@ -753,6 +753,14 @@ export default function Console() {
                           {a.provider ?? a.agent_type}
                           <small>{a.model ?? 'Local runtime'}</small>
                         </div>
+                        <div className="agent-activity">
+                          <span>{a.current_task ?? 'No active task'}</span>
+                          <small>
+                            {a.last_activity
+                              ? 'Last active ' + date(a.last_activity)
+                              : 'No activity recorded'}
+                          </small>
+                        </div>
                         <Badge status={a.status} />
                         <ChevronRight size={16} />
                       </button>
@@ -1646,6 +1654,25 @@ function AgentView({
         agents={[agent]}
         onRun={onRun}
       />
+      <Panel title="Recent messages">
+        {agent.recent_messages?.length ? (
+          agent.recent_messages.map((message) => (
+            <article key={message.id} className="agent-message">
+              <header>
+                <time>{date(message.created_at)}</time>
+                <a href={'/?view=channel&id=' + message.channel_id}>
+                  Open channel <ArrowUpRight size={12} />
+                </a>
+              </header>
+              <p>{message.body}</p>
+            </article>
+          ))
+        ) : (
+          <Empty title="No messages yet">
+            Responses from this agent will appear here after channel work.
+          </Empty>
+        )}
+      </Panel>
       <Panel title="Safe configuration">
         <pre className="payload">
           {JSON.stringify(agent.configuration, null, 2)}
