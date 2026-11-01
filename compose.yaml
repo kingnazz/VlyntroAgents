@@ -1,0 +1,132 @@
+name: vlyntro-agents
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hq}
+      POSTGRES_USER: ${POSTGRES_USER:-hq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    mem_limit: 256m
+    shm_size: 128m
+    logging: &logging
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+  api:
+    image: vlyntro-hq-runtime:${IMAGE_TAG:-local}
+    build: { context: ., target: runtime }
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=160
+      TRUST_PROXY: 'false'
+      ARTIFACT_ROOT: /data/artifacts
+    depends_on: { postgres: { condition: service_healthy } }
+    volumes: [artifacts:/data/artifacts]
+    networks: [internal, outbound]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    mem_limit: 256m
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: *logging
+  worker:
+    image: vlyntro-hq-runtime:${IMAGE_TAG:-local}
+    build: { context: ., target: runtime }
+    command:
+      ['node', 'node_modules/tsx/dist/cli.mjs', 'apps/worker/src/index.ts']
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      { NODE_ENV: production, NODE_OPTIONS: --max-old-space-size=160 }
+    depends_on: { postgres: { condition: service_healthy } }
+    networks: [internal, outbound]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          'node_modules/tsx/dist/cli.mjs',
+          'scripts/worker-health.ts',
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 140s
+    mem_limit: 256m
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: *logging
+  web:
+    image: vlyntro-hq-web:${IMAGE_TAG:-local}
+    build: { context: ., target: web }
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=192
+      API_INTERNAL_URL: http://api:4000
+    depends_on: { api: { condition: service_healthy } }
+    networks: [internal]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    mem_limit: 320m
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: *logging
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['127.0.0.1:3080:80']
+    environment: { APP_DOMAIN: '${APP_DOMAIN:-agents.vlyntro.com}' }
+    volumes:
+      - ./infra/caddy/Caddyfile.internal:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: { web: { condition: service_healthy } }
+    networks: [internal, outbound]
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1/api/v1/health']
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    mem_limit: 96m
+    logging: *logging
+networks:
+  internal: { internal: true }
+  outbound: {}
+volumes:
+  postgres_data:
+  artifacts:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,17 @@
+:80 {
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options DENY
+    Referrer-Policy same-origin
+    -Server
+  }
+  @api path /api/* /mcp /events/*
+  handle @api {
+    reverse_proxy api:4000 {
+      flush_interval -1
+    }
+  }
+  handle {
+    reverse_proxy web:3000
+  }
+}

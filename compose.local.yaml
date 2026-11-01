@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      {
+        POSTGRES_DB: hq,
+        POSTGRES_USER: hq,
+        POSTGRES_PASSWORD: local-development-only,
+      }
+    ports: ['127.0.0.1:55432:5432']
+    volumes: [local_postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hq -d hq']
+      interval: 5s
+      retries: 10
+volumes:
+  local_postgres:

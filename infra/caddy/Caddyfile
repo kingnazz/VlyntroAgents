@@ -1,0 +1,14 @@
+{$APP_DOMAIN:agents.vlyntro.com} {
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options DENY
+    Referrer-Policy same-origin
+    Strict-Transport-Security "max-age=31536000"
+    -Server
+  }
+  @api path /api/* /mcp /events/*
+  handle @api {
+    reverse_proxy api:4000 { flush_interval -1 }
+  }
+  handle { reverse_proxy web:3000 }
+}

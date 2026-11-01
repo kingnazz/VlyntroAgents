@@ -30,7 +30,8 @@
     "dotenv": "latest",
     "fastify": "5.12.7",
     "postgres": "latest",
-    "zod": "latest"
+    "zod": "latest",
+    "tsx": "latest"
   },
   "devDependencies": {
     "@eslint/js": "latest",
@@ -40,7 +41,6 @@
     "embedded-postgres": "16.4.0-beta.13",
     "eslint": "latest",
     "prettier": "latest",
-    "tsx": "latest",
     "typescript": "6.0.2",
     "typescript-eslint": "latest",
     "vitest": "latest"

@@ -32,6 +32,9 @@ importers:
       postgres:
         specifier: latest
         version: 4.0.0
+      tsx:
+        specifier: latest
+        version: 4.23.15
       zod:
         specifier: latest
         version: 4.6.7
@@ -57,9 +60,6 @@ importers:
       prettier:
         specifier: latest
         version: 3.9.10
-      tsx:
-        specifier: latest
-        version: 4.23.15
       typescript:
         specifier: 6.0.2
         version: 6.0.2
