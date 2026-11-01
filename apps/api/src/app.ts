@@ -251,7 +251,19 @@ export async function buildApp(logging = false) {
         : {}),
     });
   }
-  app.addHook('onRequest', async (req) => {
+  app.addHook('onResponse', async (req, reply) => {
+    app.log.info(
+      {
+        request_id: req.id,
+        method: req.method,
+        route: req.routeOptions.url,
+        status_code: reply.statusCode,
+      },
+      'request.completed',
+    );
+  });
+  app.addHook('onRequest', async (req, reply) => {
+    reply.header('X-Request-ID', req.id);
     if (req.headers.origin && req.headers.origin !== base)
       fail(403, 'invalid_origin', 'Cross-origin requests are not accepted.');
     const publicRoute = [

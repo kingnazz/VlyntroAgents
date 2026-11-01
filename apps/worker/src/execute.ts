@@ -40,6 +40,20 @@ export async function executeJob(job: Job, provider = generate) {
   const actor: Actor = { type: 'agent', id: job.agent_id, slug: agent.slug };
   const [run] =
     await sql`INSERT INTO runs(workspace_id,task_id,job_id,agent_id,status,input_summary) VALUES(${job.workspace_id},${job.task_id},${job.id},${job.agent_id},'running',${'Bounded workspace, task, recent messages and authorized Blackboard context. Attempt ' + job.attempts}) RETURNING id`;
+  function logRun(event: string, retry?: boolean) {
+    if (process.env.NODE_ENV !== 'test')
+      console.info(
+        JSON.stringify({
+          level: event === 'run.failed' ? 'error' : 'info',
+          event,
+          job_id: job.id,
+          run_id: run.id,
+          agent_id: job.agent_id,
+          retry,
+        }),
+      );
+  }
+  logRun('run.started');
   let step = 0;
   async function record(name: string, status = 'completed', summary = '') {
     await sql`INSERT INTO run_steps(run_id,step_number,step_type,name,status,output,completed_at) VALUES(${run.id},${++step},'action',${name},${status},${sql.json({ summary })},now())`;
@@ -188,6 +202,7 @@ export async function executeJob(job: Job, provider = generate) {
         { job_id: job.id, run_id: run.id, task_id: job.task_id },
       );
     });
+    logRun('run.completed');
   } catch (error) {
     const permanent =
       (error instanceof ExecutionError && error.permanent) ||
@@ -219,6 +234,7 @@ export async function executeJob(job: Job, provider = generate) {
         },
       );
     });
+    logRun('run.failed', retry);
   } finally {
     await sql`UPDATE agents SET status='idle',updated_at=now() WHERE id=${job.agent_id} AND status='busy'`;
   }
