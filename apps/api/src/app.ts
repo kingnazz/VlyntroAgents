@@ -1,0 +1,783 @@
+import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
+import cookie from '@fastify/cookie';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
+import { verify, hash, argon2id } from 'argon2';
+import { z } from 'zod';
+import { sql } from '../../../packages/db/src/client.js';
+import {
+  AppError,
+  type Actor,
+  fail,
+  identifier,
+  stateWrite,
+  messageInput,
+  taskInput,
+  taskPatch,
+  approvalInput,
+} from '../../../packages/shared/src/contracts.js';
+import {
+  authenticateToken,
+  audit,
+  authorize,
+  newToken,
+  tokenHash,
+} from '../../../packages/shared/src/security.js';
+import {
+  namespaceInfo,
+  readState,
+  writeState,
+} from '../../../packages/shared/src/state.js';
+import {
+  channelInfo,
+  createTask,
+  listScoped,
+  postMessage,
+  scopedRow,
+  updateTask,
+} from '../../../packages/shared/src/work.js';
+import {
+  requestApproval,
+  resolveApproval,
+} from '../../../packages/shared/src/approvals.js';
+import { registerMcp } from './mcp.js';
+declare module 'fastify' {
+  interface FastifyRequest {
+    actor: Actor;
+  }
+}
+const base = process.env.APP_BASE_URL ?? 'http://localhost:3000';
+const production = process.env.NODE_ENV === 'production';
+const page = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  before: z.string().max(100).optional(),
+});
+const listFilter = page.extend({
+  workspace: z.string().max(100).optional(),
+  status: z.string().max(40).optional(),
+  agent: z.uuid().optional(),
+  priority: z.coerce.number().int().min(0).max(4).optional(),
+});
+const eventFilter = z.object({
+  workspace: z.string().max(100).optional(),
+  namespace: identifier.optional(),
+  since: z.iso.datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  after: z
+    .string()
+    .regex(/^\d{1,20}$/)
+    .optional(),
+});
+export async function authenticate(req: FastifyRequest): Promise<Actor> {
+  if (req.headers.authorization?.startsWith('Bearer '))
+    return authenticateToken(sql, req.headers.authorization.slice(7));
+  const token = req.cookies.hq_session;
+  if (!token) return fail(401, 'unauthenticated', 'Please sign in.');
+  const [session] =
+    await sql`SELECT s.id,s.user_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=${tokenHash(token)} AND s.expires_at>now()`;
+  if (!session)
+    return fail(401, 'unauthenticated', 'Session expired. Please sign in.');
+  await sql`UPDATE sessions SET last_seen_at=now() WHERE id=${session.id}`;
+  return {
+    type: 'user',
+    id: session.user_id,
+    role: session.role,
+    sessionId: session.id,
+  };
+}
+export async function queryEvents(actor: Actor, input: unknown) {
+  const q = eventFilter.parse(input);
+  if (q.namespace) {
+    await namespaceInfo(sql, q.namespace);
+    await authorize(sql, actor, 'documents.read', { namespace: q.namespace });
+  }
+  if (q.workspace) {
+    const [w] =
+      await sql`SELECT id FROM workspaces WHERE slug=${q.workspace} OR id::text=${q.workspace}`;
+    if (w) await authorize(sql, actor, 'workspace.read', { workspace: w.id });
+  }
+  return sql`SELECT e.* FROM events e LEFT JOIN workspaces w ON w.id=e.workspace_id WHERE
+  (${q.workspace ?? null}::text IS NULL OR w.slug=${q.workspace ?? null} OR w.id::text=${q.workspace ?? null})
+  AND (${q.namespace ?? null}::text IS NULL OR e.namespace_id=${q.namespace ?? null})
+  AND (${q.since ?? null}::timestamptz IS NULL OR e.created_at>${q.since ?? null})
+  AND (${q.after ?? null}::bigint IS NULL OR e.id>${q.after ?? null})
+  AND (${actor.type === 'user'} OR EXISTS(SELECT 1 FROM agent_permissions p WHERE p.agent_id=${actor.id} AND ((p.workspace_id=e.workspace_id AND p.permission='workspace.read') OR (p.namespace_id=e.namespace_id AND p.permission='documents.read'))))
+  ORDER BY e.id ${q.after ? sql`ASC` : sql`DESC`} LIMIT ${q.limit}`;
+}
+type Handler = (req: FastifyRequest, reply: FastifyReply) => unknown;
+export async function buildApp(logging = false) {
+  const app = Fastify({
+    logger: logging
+      ? {
+          redact: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'res.headers.set-cookie',
+          ],
+          serializers: {
+            req: (req) => ({
+              method: req.method,
+              url: req.url?.split('?')[0],
+              id: req.id,
+            }),
+            err: () => ({
+              type: 'Error',
+              message: 'Request failed',
+              stack: '',
+            }),
+          },
+        }
+      : false,
+    bodyLimit: 1024 * 1024,
+    trustProxy: process.env.TRUST_PROXY === 'true',
+    disableRequestLogging: true,
+  });
+  await app.register(cookie);
+  await app.register(helmet, { contentSecurityPolicy: false });
+  await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+  const openapi: Record<string, Record<string, unknown>> = {};
+  function route(
+    method: 'GET' | 'POST' | 'PATCH',
+    url: string,
+    summary: string,
+    handler: Handler,
+    body?: z.ZodType,
+    publicRoute = false,
+  ) {
+    const path = url.replace(/:([a-z_]+)/g, '{$1}');
+    const parameters = [...url.matchAll(/:([a-z_]+)/g)].map((m) => ({
+      name: m[1],
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+    }));
+    const responseSchema =
+      url.includes('/messages') && method === 'GET'
+        ? { type: 'array', items: { $ref: '#/components/schemas/Message' } }
+        : url.includes('/state/') && url.endsWith(':key')
+          ? { $ref: '#/components/schemas/Document' }
+          : url.includes('/auth/me')
+            ? { $ref: '#/components/schemas/User' }
+            : url.includes('/health')
+              ? { $ref: '#/components/schemas/Health' }
+              : {
+                  type:
+                    method === 'GET' &&
+                    !url.match(/:(id|channel|key)$/) &&
+                    !url.includes('/openapi')
+                      ? 'array'
+                      : 'object',
+                  additionalProperties: true,
+                };
+    openapi[path] ??= {};
+    openapi[path][method.toLowerCase()] = {
+      summary,
+      parameters,
+      security: publicRoute ? [] : [{ cookieAuth: [] }, { agentBearer: [] }],
+      ...(body
+        ? {
+            requestBody: {
+              required: true,
+              content: { 'application/json': { schema: z.toJSONSchema(body) } },
+            },
+          }
+        : {}),
+      responses: {
+        200: {
+          description: 'Success',
+          content: { 'application/json': { schema: responseSchema } },
+        },
+        400: { description: 'Invalid request' },
+        401: { description: 'Authentication required' },
+        403: { description: 'Insufficient permission' },
+        409: {
+          description: 'Version or state conflict',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Error' },
+            },
+          },
+        },
+      },
+    };
+    app.route({ method, url, handler });
+  }
+  app.addHook('onRequest', async (req) => {
+    if (req.headers.origin && req.headers.origin !== base)
+      fail(403, 'invalid_origin', 'Cross-origin requests are not accepted.');
+    const publicRoute = [
+      '/api/v1/health',
+      '/api/v1/auth/login',
+      '/api/v1/openapi.json',
+    ].includes(req.url.split('?')[0]);
+    if (!publicRoute) req.actor = await authenticate(req);
+    if (
+      !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      !req.headers.authorization &&
+      req.headers.origin !== base
+    )
+      fail(403, 'csrf', 'Same-origin Origin header required.');
+  });
+  app.setErrorHandler((error, req, reply) => {
+    const status =
+      error instanceof AppError
+        ? error.status
+        : error instanceof z.ZodError
+          ? 422
+          : ((error as { statusCode?: number }).statusCode ?? 500);
+    if (status >= 500)
+      app.log.error(
+        { requestId: req.id, code: 'internal_error' },
+        'Request failed',
+      );
+    reply
+      .code(status)
+      .send({
+        error: {
+          code:
+            error instanceof AppError
+              ? error.code
+              : status === 422
+                ? 'validation_error'
+                : status === 429
+                  ? 'rate_limited'
+                  : status >= 500
+                    ? 'internal_error'
+                    : 'request_error',
+          message:
+            error instanceof AppError
+              ? error.message
+              : status === 422
+                ? 'Check the request fields.'
+                : status === 429
+                  ? 'Too many requests. Try again later.'
+                  : 'Request could not be completed.',
+          ...(error instanceof AppError ? error.details : {}),
+        },
+        request_id: req.id,
+      });
+  });
+  route(
+    'GET',
+    '/api/v1/health',
+    'Database and worker health',
+    async (_req, reply) => {
+      const [db] = await sql`SELECT 1 AS ok`;
+      const [worker] =
+        await sql`SELECT max(last_seen_at) AS last_seen_at,coalesce(bool_or(last_seen_at>now()-interval '45 seconds'),false) AS healthy FROM worker_heartbeats`;
+      if (!worker.healthy) reply.code(503);
+      return {
+        status: db.ok && worker.healthy ? 'healthy' : 'degraded',
+        version: '1.0.0',
+        database: 'connected',
+        worker,
+      };
+    },
+    undefined,
+    true,
+  );
+  const loginSchema = z
+    .object({ email: z.email().max(254), password: z.string().min(1).max(256) })
+    .strict();
+  const dummyHash = await hash(newToken(), {
+    type: argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 1,
+  });
+  route(
+    'POST',
+    '/api/v1/auth/login',
+    'Sign in with a private owner account',
+    async (req, reply) => {
+      const data = loginSchema.parse(req.body);
+      const email = data.email.toLowerCase(),
+        key = tokenHash(email + ':' + req.ip);
+      const [attempt] =
+        await sql`INSERT INTO login_attempts(key,reset_at) VALUES(${key},now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN login_attempts.reset_at<now() THEN 1 ELSE login_attempts.attempts+1 END,reset_at=CASE WHEN login_attempts.reset_at<now() THEN now()+interval '15 minutes' ELSE login_attempts.reset_at END RETURNING attempts`;
+      if (attempt.attempts > 8)
+        fail(
+          429,
+          'login_locked',
+          'Too many failed attempts. Try again in 15 minutes.',
+        );
+      const [user] = await sql`SELECT * FROM users WHERE email=${email}`;
+      const valid = await verify(
+        user?.password_hash ?? dummyHash,
+        data.password,
+      );
+      if (!valid || !user) {
+        await audit(
+          sql,
+          { type: 'system', id: 'auth' },
+          'auth.login_failed',
+          {},
+          { subject_hash: tokenHash(email) },
+        );
+        fail(401, 'invalid_credentials', 'Email or password is incorrect.');
+      }
+      const token = newToken();
+      await sql.begin(async (tx) => {
+        await tx`DELETE FROM login_attempts WHERE key=${key}`;
+        if (req.cookies.hq_session)
+          await tx`DELETE FROM sessions WHERE token_hash=${tokenHash(req.cookies.hq_session)}`;
+        await tx`INSERT INTO sessions(user_id,token_hash,expires_at) VALUES(${user.id},${tokenHash(token)},now()+interval '7 days')`;
+        await tx`DELETE FROM sessions WHERE expires_at<now()`;
+        await audit(tx, { type: 'user', id: user.id }, 'auth.login', {}, {});
+      });
+      reply.setCookie('hq_session', token, {
+        httpOnly: true,
+        secure: production,
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 604800,
+      });
+      return {
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        role: user.role,
+      };
+    },
+    loginSchema,
+    true,
+  );
+  route(
+    'POST',
+    '/api/v1/auth/logout',
+    'Invalidate the current session',
+    async (req, reply) => {
+      if (req.actor.type !== 'user')
+        fail(403, 'human_required', 'Use token revocation for agents.');
+      await sql`DELETE FROM sessions WHERE id=${req.actor.sessionId!}`;
+      await audit(sql, req.actor, 'auth.logout', {}, {});
+      reply.clearCookie('hq_session', { path: '/' });
+      return { ok: true };
+    },
+  );
+  route('GET', '/api/v1/auth/me', 'Current user', async (req) => {
+    if (req.actor.type !== 'user')
+      return { id: req.actor.id, display_name: req.actor.slug, role: 'agent' };
+    const [user] =
+      await sql`SELECT id,email,display_name,role FROM users WHERE id=${req.actor.id}`;
+    return user;
+  });
+  route(
+    'GET',
+    '/api/v1/workspaces',
+    'List accessible workspaces',
+    async (req) =>
+      sql`SELECT * FROM workspaces w WHERE ${req.actor.type === 'user'} OR EXISTS(SELECT 1 FROM agent_permissions p WHERE p.agent_id=${req.actor.id} AND p.workspace_id=w.id AND p.permission='workspace.read') ORDER BY created_at`,
+  );
+  route('GET', '/api/v1/workspaces/:id', 'Workspace details', async (req) => {
+    const { id } = req.params as { id: string };
+    const [w] =
+      await sql`SELECT * FROM workspaces WHERE id::text=${id} OR slug=${id}`;
+    if (!w) return fail(404, 'not_found', 'Workspace not found.');
+    await authorize(sql, req.actor, 'workspace.read', { workspace: w.id });
+    return w;
+  });
+  route(
+    'GET',
+    '/api/v1/workspaces/:workspace/channels',
+    'Accessible workspace channels',
+    (req) =>
+      listScoped(req.actor, 'channels', {
+        ...page.parse(req.query),
+        workspace: (req.params as { workspace: string }).workspace,
+      }),
+  );
+  route(
+    'GET',
+    '/api/v1/agents',
+    'Agent directory and effective configuration',
+    async (req) => {
+      if (req.actor.type !== 'user') {
+        const [scope] =
+          await sql`SELECT 1 FROM agent_permissions WHERE agent_id=${req.actor.id} AND permission='workspace.read'`;
+        if (!scope) fail(403, 'scope_required', 'Workspace access required.');
+      }
+      return sql`SELECT a.*,(SELECT max(started_at) FROM runs r WHERE r.agent_id=a.id) AS last_activity,(SELECT title FROM tasks t WHERE t.assigned_agent_id=a.id AND t.status='running' LIMIT 1) AS current_task FROM agents a ORDER BY a.created_at,a.slug`;
+    },
+  );
+  route(
+    'GET',
+    '/api/v1/agents/:id',
+    'Agent details and permissions',
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const [a] =
+        await sql`SELECT * FROM agents WHERE id::text=${id} OR slug=${id}`;
+      if (!a) return fail(404, 'not_found', 'Agent not found.');
+      if (req.actor.type !== 'user' && req.actor.id !== a.id)
+        fail(
+          403,
+          'forbidden',
+          'Agents may inspect their own configuration only.',
+        );
+      const permissions =
+        await sql`SELECT workspace_id,namespace_id,permission FROM agent_permissions WHERE agent_id=${a.id}`;
+      return { ...a, permissions };
+    },
+  );
+  const agentPatch = z
+    .object({
+      status: z.enum(['disabled', 'offline', 'idle']).optional(),
+      model: z.string().min(1).max(100).optional(),
+      system_prompt: z.string().max(8000).optional(),
+    })
+    .strict();
+  route(
+    'PATCH',
+    '/api/v1/agents/:id',
+    'Configure or disable an agent',
+    async (req) => {
+      if (
+        req.actor.type !== 'user' ||
+        !['owner', 'admin'].includes(req.actor.role ?? '')
+      )
+        fail(403, 'human_required', 'Administrator required.');
+      const data = agentPatch.parse(req.body);
+      if (!Object.keys(data).length)
+        fail(422, 'empty_patch', 'No fields to update.');
+      return sql.begin(async (tx) => {
+        const [agent] =
+          await tx`UPDATE agents SET ${tx(data)},updated_at=now() WHERE id::text=${(req.params as { id: string }).id} RETURNING *`;
+        if (!agent) return fail(404, 'not_found', 'Agent not found.');
+        if (data.status === 'disabled')
+          await tx`UPDATE jobs SET status='cancelled' WHERE agent_id=${agent.id} AND status IN ('queued','waiting')`;
+        await audit(
+          tx,
+          req.actor,
+          'settings.agent_updated',
+          {},
+          { agent_id: agent.id, fields: Object.keys(data) },
+        );
+        return agent;
+      });
+    },
+    agentPatch,
+  );
+  route(
+    'GET',
+    '/api/v1/channels/:channel/messages',
+    'Paginated channel messages',
+    async (req) => {
+      const room = await channelInfo(
+        sql,
+        req.actor,
+        (req.params as { channel: string }).channel,
+        'messages.read',
+      );
+      const q = page.parse(req.query);
+      return sql`SELECT m.*,coalesce(u.display_name,a.display_name,'System') AS sender_name FROM messages m LEFT JOIN users u ON m.sender_type='user' AND m.sender_id=u.id LEFT JOIN agents a ON m.sender_type='agent' AND m.sender_id=a.id WHERE m.channel_id=${room.id} ${q.before ? sql`AND (m.created_at,m.id)<(SELECT created_at,id FROM messages WHERE id::text=${q.before} AND channel_id=${room.id})` : sql``} ORDER BY m.created_at DESC,m.id DESC LIMIT ${q.limit}`;
+    },
+  );
+  route(
+    'POST',
+    '/api/v1/channels/:channel/messages',
+    'Post a message and route mentions',
+    (req) =>
+      postMessage(
+        req.actor,
+        (req.params as { channel: string }).channel,
+        req.body,
+      ),
+    messageInput,
+  );
+  for (const table of ['tasks', 'runs', 'approvals', 'artifacts'] as const) {
+    route('GET', `/api/v1/${table}`, `List ${table}`, (req) =>
+      listScoped(req.actor, table, listFilter.parse(req.query)),
+    );
+    route('GET', `/api/v1/${table}/:id`, `${table} detail`, async (req) => {
+      const row = await scopedRow(
+        sql,
+        req.actor,
+        table,
+        (req.params as { id: string }).id,
+        table === 'tasks' ? 'tasks.read' : 'workspace.read',
+      );
+      if (table === 'artifacts') {
+        const { storage_path: _storage, ...safe } = row;
+        return safe;
+      }
+      if (table !== 'tasks') return row;
+      return {
+        ...row,
+        dependencies:
+          await sql`SELECT t.* FROM task_dependencies d JOIN tasks t ON t.id=d.depends_on_task_id WHERE d.task_id=${row.id}`,
+        runs: await sql`SELECT * FROM runs WHERE task_id=${row.id} ORDER BY started_at DESC LIMIT 30`,
+        approvals:
+          await sql`SELECT * FROM approvals WHERE task_id=${row.id} ORDER BY created_at DESC LIMIT 30`,
+        artifacts:
+          await sql`SELECT id,name,artifact_type,created_at FROM artifacts WHERE task_id=${row.id}`,
+        messages: row.channel_id
+          ? await sql`SELECT * FROM messages WHERE channel_id=${row.channel_id} AND metadata->>'task_id'=${row.id} ORDER BY created_at DESC LIMIT 30`
+          : [],
+        timeline:
+          await sql`SELECT * FROM events WHERE payload->>'task_id'=${row.id} ORDER BY id DESC LIMIT 100`,
+      };
+    });
+  }
+  route(
+    'POST',
+    '/api/v1/tasks',
+    'Create and optionally assign a task',
+    (req) => createTask(req.actor, req.body),
+    taskInput,
+  );
+  route(
+    'PATCH',
+    '/api/v1/tasks/:id',
+    'Update task state or assignment',
+    (req) => updateTask(req.actor, (req.params as { id: string }).id, req.body),
+    taskPatch,
+  );
+  route(
+    'GET',
+    '/api/v1/runs/:id/steps',
+    'Safe action summaries for a run',
+    async (req) => {
+      const row = await scopedRow(
+        sql,
+        req.actor,
+        'runs',
+        (req.params as { id: string }).id,
+        'workspace.read',
+      );
+      return sql`SELECT * FROM run_steps WHERE run_id=${row.id} ORDER BY step_number`;
+    },
+  );
+  route(
+    'POST',
+    '/api/v1/approvals',
+    'Request human approval',
+    (req) => requestApproval(req.actor, req.body),
+    approvalInput,
+  );
+  const commentSchema = z
+    .object({ comment: z.string().max(4000).default('') })
+    .strict();
+  for (const [path, status] of [
+    ['approve', 'approved'],
+    ['reject', 'rejected'],
+  ] as const)
+    route(
+      'POST',
+      `/api/v1/approvals/:id/${path}`,
+      `${path} the exact reviewed action`,
+      (req) =>
+        resolveApproval(
+          req.actor,
+          (req.params as { id: string }).id,
+          status,
+          commentSchema.parse(req.body ?? {}).comment,
+        ),
+      commentSchema,
+    );
+  route(
+    'GET',
+    '/api/v1/state/:namespace/:key',
+    'Read versioned Blackboard state',
+    (req) => {
+      const p = req.params as { namespace: string; key: string };
+      return readState(
+        req.actor,
+        identifier.parse(p.namespace),
+        identifier.parse(p.key),
+      );
+    },
+  );
+  route(
+    'POST',
+    '/api/v1/state/:namespace/:key',
+    'Optimistic Blackboard write with atomic audit',
+    (req) => {
+      const p = req.params as { namespace: string; key: string };
+      return writeState(
+        req.actor,
+        identifier.parse(p.namespace),
+        identifier.parse(p.key),
+        req.body,
+      );
+    },
+    stateWrite,
+  );
+  route(
+    'GET',
+    '/api/v1/state/:namespace',
+    'List Blackboard keys',
+    async (req) => {
+      const namespace = identifier.parse(
+        (req.params as { namespace: string }).namespace,
+      );
+      await namespaceInfo(sql, namespace);
+      await authorize(sql, req.actor, 'documents.read', { namespace });
+      return sql`SELECT key,version,updated_by,updated_at FROM documents WHERE namespace_id=${namespace} ORDER BY key`;
+    },
+  );
+  route(
+    'GET',
+    '/api/v1/namespaces',
+    'Accessible Blackboard namespaces',
+    (req) =>
+      sql`SELECT n.* FROM namespaces n WHERE ${req.actor.type === 'user'} OR EXISTS(SELECT 1 FROM agent_permissions p WHERE p.agent_id=${req.actor.id} AND p.namespace_id=n.id AND p.permission='documents.read')`,
+  );
+  route('GET', '/api/v1/events', 'Append-only audit log', (req) =>
+    queryEvents(req.actor, req.query),
+  );
+  const streamCounts = new Map<string, number>();
+  app.get('/api/v1/stream', async (req, reply) => {
+    const q = eventFilter.parse(req.query);
+    const actor = req.actor;
+    if ((streamCounts.get(actor.id) ?? 0) >= 4)
+      return fail(429, 'stream_limit', 'Too many live connections.');
+    streamCounts.set(actor.id, (streamCounts.get(actor.id) ?? 0) + 1);
+    let cursor = req.headers['last-event-id']?.toString() ?? q.after;
+    if (cursor && !/^\d{1,20}$/.test(cursor))
+      fail(422, 'invalid_cursor', 'Invalid event cursor.');
+    if (!cursor) {
+      const [row] =
+        await sql`SELECT coalesce(max(id),0)::text AS id FROM events`;
+      cursor = row.id;
+    }
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    reply.raw.write('retry: 2500\n\n');
+    let busy = false,
+      closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      clearInterval(timer);
+      streamCounts.set(
+        actor.id,
+        Math.max(0, (streamCounts.get(actor.id) ?? 1) - 1),
+      );
+      reply.raw.end();
+    };
+    const timer = setInterval(async () => {
+      if (busy || closed) return;
+      busy = true;
+      try {
+        await authenticate(req);
+        const events = await queryEvents(actor, {
+          ...q,
+          after: cursor,
+          limit: 200,
+        });
+        for (const event of events) {
+          cursor = String(event.id);
+          if (
+            !reply.raw.write(
+              `id: ${event.id}\nevent: ${event.action}\ndata: ${JSON.stringify(event)}\n\n`,
+            )
+          ) {
+            close();
+            break;
+          }
+        }
+        if (!closed) reply.raw.write(': heartbeat\n\n');
+      } catch {
+        close();
+      } finally {
+        busy = false;
+      }
+    }, 1000);
+    req.raw.on('close', close);
+  });
+  route(
+    'GET',
+    '/api/v1/openapi.json',
+    'OpenAPI 3.1 contract',
+    () => ({
+      openapi: '3.1.0',
+      info: { title: 'Vlyntro Agent HQ', version: '1.0.0' },
+      servers: [{ url: base }],
+      paths: openapi,
+      components: {
+        securitySchemes: {
+          agentBearer: {
+            type: 'http',
+            scheme: 'bearer',
+            description:
+              'SHA-256 hashed, scoped agent token. MCP accepts this scheme only.',
+          },
+          cookieAuth: {
+            type: 'apiKey',
+            in: 'cookie',
+            name: 'hq_session',
+            description:
+              'HttpOnly server session. Mutations require a same-origin Origin header.',
+          },
+        },
+        schemas: {
+          Document: {
+            type: 'object',
+            required: ['key', 'value', 'version', 'updated_by', 'updated_at'],
+            properties: {
+              key: { type: 'string' },
+              value: {},
+              version: { type: 'integer', minimum: 1 },
+              updated_by: { type: 'string' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+          Message: {
+            type: 'object',
+            required: ['id', 'body', 'sender_type', 'channel_id', 'created_at'],
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              body: { type: 'string' },
+              sender_type: { enum: ['user', 'agent', 'system'] },
+              channel_id: { type: 'string', format: 'uuid' },
+              created_at: { type: 'string', format: 'date-time' },
+            },
+            additionalProperties: true,
+          },
+          User: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              email: { type: 'string' },
+              display_name: { type: 'string' },
+              role: { type: 'string' },
+            },
+          },
+          Health: {
+            type: 'object',
+            properties: {
+              status: { enum: ['healthy', 'degraded'] },
+              version: { type: 'string' },
+              database: { type: 'string' },
+              worker: { type: 'object' },
+            },
+          },
+          Error: {
+            type: 'object',
+            properties: {
+              error: {
+                type: 'object',
+                properties: {
+                  code: { type: 'string' },
+                  message: { type: 'string' },
+                  current_version: { type: ['integer', 'null'] },
+                },
+              },
+              request_id: { type: 'string' },
+            },
+          },
+        },
+      },
+    }),
+    undefined,
+    true,
+  );
+  await registerMcp(app);
+  return app;
+}
