@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import console from 'node:console';
 import { readFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import postgres from 'postgres';
 const sql = postgres(process.env.DATABASE_URL, { onnotice: () => {} });
 try {
@@ -51,8 +52,27 @@ try {
   );
   const health = await globalThis.fetch('http://127.0.0.1:4000/api/v1/health');
   assert.equal(health.status, 200);
+  const [probe] =
+    await sql`INSERT INTO jobs(workspace_id,agent_id,job_type,max_attempts,payload)
+   VALUES(${record.workspace_id},${job.agent_id},'restart.probe',1,${sql.json({ instruction: 'Harmless internal restart probe. Return a short confirmation only. Do not change state, publish, contact external systems or hand work to another agent.' })}) RETURNING id`;
+  let processed = false;
+  for (let i = 0; i < 30; i++) {
+    const [result] =
+      await sql`SELECT status,attempts FROM jobs WHERE id=${probe.id}`;
+    if (['completed', 'failed'].includes(result.status)) {
+      assert.equal(result.attempts, 1);
+      assert.equal(
+        (await sql`SELECT id FROM runs WHERE job_id=${probe.id}`).length,
+        1,
+      );
+      processed = true;
+      break;
+    }
+    await delay(1000);
+  }
+  assert.ok(processed);
   console.info(
-    'PASS restart persistence: owner, message, task, job, run, approval, Blackboard, migration, audit and worker health.',
+    'PASS restart persistence: owner, message, task, job, run, approval, Blackboard, migration, audit, worker health and fresh queue processing.',
   );
 } catch {
   console.error(
