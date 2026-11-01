@@ -167,6 +167,15 @@ describe('authentication and HTTP boundaries', () => {
     expect(
       spec.paths['/api/v1/state/{namespace}/{key}'].post.requestBody,
     ).toBeTruthy();
+    const taskBody = spec.paths['/api/v1/tasks'].post.requestBody.content[
+      'application/json'
+    ].schema.$ref
+      .split('/')
+      .pop();
+    expect(spec.components.schemas[taskBody].required).toEqual([
+      'workspace_id',
+      'title',
+    ]);
     function verifyRefs(value: unknown) {
       if (Array.isArray(value)) {
         value.forEach(verifyRefs);

@@ -158,7 +158,7 @@ export async function buildApp(logging = false) {
     }));
     const responseSchema = responseModel(url, method);
     const bodyName = (method + url + '_body').replace(/[^a-zA-Z0-9]/g, '_');
-    if (body) modelSchemas[bodyName] = toOpenapiSchema(body, bodyName);
+    if (body) modelSchemas[bodyName] = toOpenapiSchema(body, bodyName, 'input');
     const querySchema =
       method === 'GET'
         ? url.endsWith('/events')

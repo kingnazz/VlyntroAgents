@@ -180,6 +180,7 @@ const models = {
 export function toOpenapiSchema(
   schema: z.ZodType,
   name: string,
+  io: 'input' | 'output' = 'output',
 ): Record<string, unknown> {
   function relocate(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(relocate);
@@ -194,7 +195,7 @@ export function toOpenapiSchema(
       );
     return value;
   }
-  return relocate(z.toJSONSchema(schema)) as Record<string, unknown>;
+  return relocate(z.toJSONSchema(schema, { io })) as Record<string, unknown>;
 }
 export const modelSchemas: Record<
   string,
