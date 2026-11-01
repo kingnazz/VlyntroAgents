@@ -1045,7 +1045,7 @@ export default function Console() {
           <span>
             <span className={'dot ' + (connected ? 'green' : 'amber')} />
             {connected
-              ? 'All changes saved to your workspace'
+              ? 'Live workspace connected'
               : 'Live connection interrupted'}
           </span>
         </footer>

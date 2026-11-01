@@ -170,6 +170,8 @@ export async function executeJob(job: Job, provider = generate) {
       await record('Post channel response');
     }
     await sql.begin(async (tx) => {
+      await tx`INSERT INTO artifacts(workspace_id,task_id,run_id,created_by_type,created_by_id,artifact_type,name,mime_type,content_text)
+       VALUES(${job.workspace_id},${job.task_id},${run.id},'agent',${job.agent_id},'text',${agent.slug + ' response'},'text/plain',${summary.slice(0, 16000)})`;
       await tx`UPDATE jobs SET status='completed',result=${tx.json({ summary: summary.slice(0, 4000), run_id: run.id })},completed_at=now(),updated_at=now() WHERE id=${job.id}`;
       await tx`UPDATE runs SET status='completed',output_summary=${summary.slice(0, 4000)},completed_at=now() WHERE id=${run.id}`;
       if (job.task_id && !waiting) {

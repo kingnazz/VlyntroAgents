@@ -9,8 +9,8 @@ export default function Login() {
     setBusy(true);
     setError('');
     const form = new FormData(event.currentTarget);
-    const passwordField=event.currentTarget.elements.namedItem('password');
-    if(passwordField instanceof HTMLInputElement) passwordField.value='';
+    const passwordField = event.currentTarget.elements.namedItem('password');
+    if (passwordField instanceof HTMLInputElement) passwordField.value = '';
     try {
       const response = await fetch('/api/v1/auth/login', {
         method: 'POST',

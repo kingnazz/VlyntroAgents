@@ -41,6 +41,11 @@ import {
   resolveApproval,
 } from '../../../packages/shared/src/approvals.js';
 import { registerMcp } from './mcp.js';
+import { responseModel, modelSchemas } from './models.js';
+import {
+  createArtifact,
+  artifactInput,
+} from '../../../packages/shared/src/artifacts.js';
 declare module 'fastify' {
   interface FastifyRequest {
     actor: Actor;
@@ -151,24 +156,32 @@ export async function buildApp(logging = false) {
       required: true,
       schema: { type: 'string' },
     }));
-    const responseSchema =
-      url.includes('/messages') && method === 'GET'
-        ? { type: 'array', items: { $ref: '#/components/schemas/Message' } }
-        : url.includes('/state/') && url.endsWith(':key')
-          ? { $ref: '#/components/schemas/Document' }
-          : url.includes('/auth/me')
-            ? { $ref: '#/components/schemas/User' }
-            : url.includes('/health')
-              ? { $ref: '#/components/schemas/Health' }
-              : {
-                  type:
-                    method === 'GET' &&
-                    !url.match(/:(id|channel|key)$/) &&
-                    !url.includes('/openapi')
-                      ? 'array'
-                      : 'object',
-                  additionalProperties: true,
-                };
+    const responseSchema = responseModel(url, method);
+    const querySchema =
+      method === 'GET'
+        ? url.endsWith('/events')
+          ? eventFilter
+          : [
+                '/api/v1/tasks',
+                '/api/v1/runs',
+                '/api/v1/approvals',
+                '/api/v1/artifacts',
+              ].includes(url)
+            ? listFilter
+            : url.endsWith('/messages') || url.endsWith('/channels')
+              ? page
+              : null
+        : null;
+    if (querySchema) {
+      const schema = z.toJSONSchema(querySchema);
+      for (const [name, property] of Object.entries(schema.properties ?? {}))
+        parameters.push({
+          name,
+          in: 'query',
+          required: false,
+          schema: property as { type: string },
+        });
+    }
     openapi[path] ??= {};
     openapi[path][method.toLowerCase()] = {
       summary,
@@ -185,7 +198,9 @@ export async function buildApp(logging = false) {
       responses: {
         200: {
           description: 'Success',
-          content: { 'application/json': { schema: responseSchema } },
+          content: url.endsWith('/download')
+            ? { 'text/plain': { schema: { type: 'string' } } }
+            : { 'application/json': { schema: responseSchema } },
         },
         400: { description: 'Invalid request' },
         401: { description: 'Authentication required' },
@@ -200,7 +215,14 @@ export async function buildApp(logging = false) {
         },
       },
     };
-    app.route({ method, url, handler });
+    app.route({
+      method,
+      url,
+      handler,
+      ...(url === '/api/v1/auth/login'
+        ? { config: { rateLimit: { max: 12, timeWindow: '1 minute' } } }
+        : {}),
+    });
   }
   app.addHook('onRequest', async (req) => {
     if (req.headers.origin && req.headers.origin !== base)
@@ -230,32 +252,30 @@ export async function buildApp(logging = false) {
         { requestId: req.id, code: 'internal_error' },
         'Request failed',
       );
-    reply
-      .code(status)
-      .send({
-        error: {
-          code:
-            error instanceof AppError
-              ? error.code
-              : status === 422
-                ? 'validation_error'
-                : status === 429
-                  ? 'rate_limited'
-                  : status >= 500
-                    ? 'internal_error'
-                    : 'request_error',
-          message:
-            error instanceof AppError
-              ? error.message
-              : status === 422
-                ? 'Check the request fields.'
-                : status === 429
-                  ? 'Too many requests. Try again later.'
-                  : 'Request could not be completed.',
-          ...(error instanceof AppError ? error.details : {}),
-        },
-        request_id: req.id,
-      });
+    reply.code(status).send({
+      error: {
+        code:
+          error instanceof AppError
+            ? error.code
+            : status === 422
+              ? 'validation_error'
+              : status === 429
+                ? 'rate_limited'
+                : status >= 500
+                  ? 'internal_error'
+                  : 'request_error',
+        message:
+          error instanceof AppError
+            ? error.message
+            : status === 422
+              ? 'Check the request fields.'
+              : status === 429
+                ? 'Too many requests. Try again later.'
+                : 'Request could not be completed.',
+        ...(error instanceof AppError ? error.details : {}),
+      },
+      request_id: req.id,
+    });
   });
   route(
     'GET',
@@ -626,13 +646,98 @@ export async function buildApp(logging = false) {
   route('GET', '/api/v1/events', 'Append-only audit log', (req) =>
     queryEvents(req.actor, req.query),
   );
+  route(
+    'POST',
+    '/api/v1/artifacts',
+    'Save a bounded text artifact or HTTPS reference',
+    (req) => createArtifact(req.actor, req.body),
+    artifactInput,
+  );
+  route(
+    'GET',
+    '/api/v1/artifacts/:id/download',
+    'Download an authenticated artifact as a safe attachment',
+    async (req, reply) => {
+      const artifact = await scopedRow(
+        sql,
+        req.actor,
+        'artifacts',
+        (req.params as { id: string }).id,
+        'workspace.read',
+      );
+      reply
+        .header('Content-Type', 'text/plain; charset=utf-8')
+        .header(
+          'Content-Disposition',
+          `attachment; filename="${artifact.id}.txt"`,
+        )
+        .header('X-Content-Type-Options', 'nosniff');
+      return artifact.content_text ?? '';
+    },
+  );
+  openapi['/api/v1/stream'] = {
+    get: {
+      summary:
+        'Authenticated event stream with Last-Event-ID replay and heartbeat comments',
+      security: [{ cookieAuth: [] }, { agentBearer: [] }],
+      parameters: [
+        { in: 'header', name: 'Last-Event-ID', schema: { type: 'string' } },
+        ...['workspace', 'namespace', 'since', 'after'].map((name) => ({
+          in: 'query',
+          name,
+          schema: { type: 'string' },
+        })),
+      ],
+      responses: {
+        200: {
+          description: 'SSE events and heartbeat comments',
+          content: { 'text/event-stream': { schema: { type: 'string' } } },
+        },
+        401: { description: 'Authentication required' },
+      },
+    },
+  };
+  openapi['/mcp'] = {
+    post: {
+      summary: 'Stateless MCP Streamable HTTP',
+      security: [{ agentBearer: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['jsonrpc', 'method'],
+              properties: {
+                jsonrpc: { const: '2.0' },
+                id: {},
+                method: { type: 'string' },
+                params: { type: 'object' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'MCP JSON-RPC response',
+          content: { 'application/json': { schema: { type: 'object' } } },
+        },
+        202: { description: 'Notification accepted' },
+        401: { description: 'Agent bearer token required' },
+      },
+    },
+  };
   const streamCounts = new Map<string, number>();
+  const streamClosers = new Set<() => void>();
+  app.addHook('preClose', async () => {
+    for (const close of streamClosers) close();
+  });
   app.get('/api/v1/stream', async (req, reply) => {
     const q = eventFilter.parse(req.query);
     const actor = req.actor;
     if ((streamCounts.get(actor.id) ?? 0) >= 4)
       return fail(429, 'stream_limit', 'Too many live connections.');
-    streamCounts.set(actor.id, (streamCounts.get(actor.id) ?? 0) + 1);
     let cursor = req.headers['last-event-id']?.toString() ?? q.after;
     if (cursor && !/^\d{1,20}$/.test(cursor))
       fail(422, 'invalid_cursor', 'Invalid event cursor.');
@@ -641,6 +746,8 @@ export async function buildApp(logging = false) {
         await sql`SELECT coalesce(max(id),0)::text AS id FROM events`;
       cursor = row.id;
     }
+    await queryEvents(actor, { ...q, after: cursor, limit: 1 });
+    streamCounts.set(actor.id, (streamCounts.get(actor.id) ?? 0) + 1);
     reply.hijack();
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -654,6 +761,7 @@ export async function buildApp(logging = false) {
     const close = () => {
       if (closed) return;
       closed = true;
+      streamClosers.delete(close);
       clearInterval(timer);
       streamCounts.set(
         actor.id,
@@ -689,6 +797,7 @@ export async function buildApp(logging = false) {
         busy = false;
       }
     }, 1000);
+    streamClosers.add(close);
     req.raw.on('close', close);
   });
   route(
@@ -716,63 +825,7 @@ export async function buildApp(logging = false) {
               'HttpOnly server session. Mutations require a same-origin Origin header.',
           },
         },
-        schemas: {
-          Document: {
-            type: 'object',
-            required: ['key', 'value', 'version', 'updated_by', 'updated_at'],
-            properties: {
-              key: { type: 'string' },
-              value: {},
-              version: { type: 'integer', minimum: 1 },
-              updated_by: { type: 'string' },
-              updated_at: { type: 'string', format: 'date-time' },
-            },
-          },
-          Message: {
-            type: 'object',
-            required: ['id', 'body', 'sender_type', 'channel_id', 'created_at'],
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              body: { type: 'string' },
-              sender_type: { enum: ['user', 'agent', 'system'] },
-              channel_id: { type: 'string', format: 'uuid' },
-              created_at: { type: 'string', format: 'date-time' },
-            },
-            additionalProperties: true,
-          },
-          User: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              email: { type: 'string' },
-              display_name: { type: 'string' },
-              role: { type: 'string' },
-            },
-          },
-          Health: {
-            type: 'object',
-            properties: {
-              status: { enum: ['healthy', 'degraded'] },
-              version: { type: 'string' },
-              database: { type: 'string' },
-              worker: { type: 'object' },
-            },
-          },
-          Error: {
-            type: 'object',
-            properties: {
-              error: {
-                type: 'object',
-                properties: {
-                  code: { type: 'string' },
-                  message: { type: 'string' },
-                  current_version: { type: ['integer', 'null'] },
-                },
-              },
-              request_id: { type: 'string' },
-            },
-          },
-        },
+        schemas: modelSchemas,
       },
     }),
     undefined,

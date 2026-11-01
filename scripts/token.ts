@@ -4,6 +4,14 @@ const [action, slug] = process.argv.slice(2);
 try {
   if (!['create', 'rotate', 'revoke'].includes(action) || !slug)
     throw new Error('Usage: agent:token:create|rotate|revoke <slug>');
+  if (
+    action !== 'revoke' &&
+    !process.stdout.isTTY &&
+    !process.env.TOKEN_OUTPUT_ACK
+  )
+    throw new Error(
+      'Use an interactive terminal or TOKEN_OUTPUT_ACK=1 with secure output redirection.',
+    );
   const token = newToken();
   await sql.begin(async (tx) => {
     const [agent] =
@@ -22,10 +30,6 @@ try {
     );
   });
   if (action !== 'revoke') {
-    if (!process.stdout.isTTY && !process.env.TOKEN_OUTPUT_ACK)
-      throw new Error(
-        'Token created but withheld. Use an interactive terminal or TOKEN_OUTPUT_ACK=1 with secure output redirection; rotate to retrieve a new token.',
-      );
     process.stdout.write(token + '\n');
   } else console.info('Agent tokens revoked.');
 } catch (e) {

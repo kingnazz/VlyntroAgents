@@ -197,7 +197,11 @@ export async function updateTask(actor: Actor, id: string, input: unknown) {
       actor,
       'task.updated',
       { workspace: task.workspace_id },
-      { task_id: id, ...data },
+      {
+        task_id: id,
+        fields: Object.keys(data),
+        status: data.status ?? task.status,
+      },
     );
     return result;
   });
@@ -246,7 +250,7 @@ export async function postMessage(
           m[1].toLowerCase(),
         ),
       ),
-    ].slice(0, 5);
+    ].slice(0, actor.type === 'agent' ? 1 : 5);
     if (mentions.length) {
       const root = context.rootId ?? message.id;
       await tx`INSERT INTO routing_roots(id) VALUES(${root}) ON CONFLICT DO NOTHING`;
@@ -294,6 +298,15 @@ export async function postMessage(
             'task.created',
             { workspace: room.workspace_id },
             { task_id: taskId },
+          );
+        } else {
+          await tx`UPDATE tasks SET assigned_agent_id=${target.id},status=CASE WHEN status IN ('needs_approval','blocked','cancelled') THEN status ELSE 'queued' END,updated_at=now() WHERE id=${taskId} AND workspace_id=${room.workspace_id}`;
+          await audit(
+            tx,
+            actor,
+            'task.assigned',
+            { workspace: room.workspace_id },
+            { task_id: taskId, agent_id: target.id },
           );
         }
         await tx`INSERT INTO jobs(workspace_id,task_id,agent_id,job_type,payload,root_id,idempotency_key)
