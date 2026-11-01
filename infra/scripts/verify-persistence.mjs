@@ -9,7 +9,7 @@ try {
     await readFile('/data/artifacts/acceptance-result.json', 'utf8'),
   );
   const [owner] =
-    await sql`SELECT id,password_hash FROM users WHERE email='nazar@vlyntro.com' AND role='owner'`;
+    await sql`SELECT id,password_hash FROM users WHERE id=(SELECT reviewed_by_user_id FROM approvals WHERE id=${record.approval_id}) AND role='owner'`;
   assert.ok(owner && owner.password_hash.startsWith('$argon2id$'));
   assert.equal(
     (await sql`SELECT id FROM messages WHERE id=${record.message_id}`).length,

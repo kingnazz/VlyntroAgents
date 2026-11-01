@@ -54,7 +54,7 @@ The UI shows failed runs, safe steps and pending decisions. Avoid sharing raw me
 
 The required record is `A agents.vlyntro.com = 163.245.218.6`. Remove conflicting AAAA records if the VPS is not reachable on that IPv6 address. Verify resolution with `dig +short agents.vlyntro.com`. No DNS change is made by deployment scripts.
 
-After DNS resolves, run `ACME_EMAIL=nazar@vlyntro.com bash scripts/enable-tls.sh`. This obtains a Let's Encrypt certificate with webroot validation, installs the Agent HQ TLS virtual host, validates Nginx and reloads it. Certbot's existing timer renews certificates; the installed deploy hook reloads Nginx after a valid renewal. Confirm with `curl -I https://agents.vlyntro.com/login` and `openssl s_client -connect agents.vlyntro.com:443 -servername agents.vlyntro.com`.
+After DNS resolves, run `ACME_EMAIL=owner@example.com bash scripts/enable-tls.sh`. This obtains a Let's Encrypt certificate with webroot validation, installs the Agent HQ TLS virtual host, validates Nginx and reloads it. Certbot's existing timer renews certificates; the installed deploy hook reloads Nginx after a valid renewal. Confirm with `curl -I https://agents.vlyntro.com/login` and `openssl s_client -connect agents.vlyntro.com:443 -servername agents.vlyntro.com`.
 
 While public DNS/TLS is pending, access the deployed stack through an encrypted SSH tunnel for checks. The loopback app still enforces the production Origin and Secure cookies. Do not enter passwords over a public cleartext HTTP address.
 
@@ -73,7 +73,7 @@ The restore script requires a new `hq_restore_*` database. Never substitute the 
 
 ## Agent operations
 
-Create/rotate/revoke tokens with `dc exec -it api pnpm agent:token:create chatgpt`, `dc exec -it api pnpm agent:token:rotate chatgpt` or `dc exec api pnpm agent:token:revoke chatgpt`. Tokens are displayed once. Store them directly in the client secret store; never paste them into logs or Git.
+Create/rotate/revoke tokens with `dc exec api pnpm agent:token:create chatgpt`, `dc exec api pnpm agent:token:rotate chatgpt` or `dc exec api pnpm agent:token:revoke chatgpt`. Tokens are displayed once. Store them directly in the client secret store; never paste them into logs or Git.
 
 Disable an agent from its dashboard profile. The server cancels queued/waiting work and rejects its tokens while disabled. Active execution is bounded and must finish before deployment changes. Agent model identifiers can be changed through the owner/admin `PATCH /api/v1/agents/:id` endpoint. Environment model variables affect initial seed only, so reseeding does not overwrite an operator's model choice.
 

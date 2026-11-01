@@ -120,7 +120,7 @@ docker compose --env-file .env.production build --no-cache
 docker compose --env-file .env.production up -d --wait postgres
 docker compose --env-file .env.production run --rm --no-deps api pnpm db:migrate
 docker compose --env-file .env.production run --rm --no-deps api pnpm db:seed
-docker compose --env-file .env.production run --rm --no-deps -it api pnpm admin:create
+docker compose --env-file .env.production run --rm --no-deps api pnpm admin:create
 docker compose --env-file .env.production up -d
 docker compose --env-file .env.production ps
 curl --fail http://127.0.0.1:3080/api/v1/health
@@ -136,7 +136,7 @@ docker compose --env-file .env.production --env-file /root/.config/vlyntro/boots
 
 Do not use `compose.admin.yaml` for normal service startup. Remove the temporary server bootstrap file after verification and retain credentials in the owner's protected secret store.
 
-Install the separate `infra/nginx.conf` virtual host only after reviewing existing services and running `nginx -t`. This HTTP host serves ACME challenges and redirects to HTTPS; it does not accept cleartext login. When DNS points at the server, run `ACME_EMAIL=nazar@vlyntro.com bash scripts/enable-tls.sh`. The script creates only the Agent HQ TLS host and a renewal reload hook, validates Nginx and reloads it without stopping other sites.
+Install the separate `infra/nginx.conf` virtual host only after reviewing existing services and running `nginx -t`. This HTTP host serves ACME challenges and redirects to HTTPS; it does not accept cleartext login. When DNS points at the server, run `ACME_EMAIL=owner@example.com bash scripts/enable-tls.sh`. The script creates only the Agent HQ TLS host and a renewal reload hook, validates Nginx and reloads it without stopping other sites.
 
 On a fresh VPS with free ports, Caddy can terminate TLS instead. Use `infra/caddy/Caddyfile`, expose 80/443 on that service and retain its named certificate volumes. Do not launch it on ports already used by another proxy.
 
