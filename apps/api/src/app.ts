@@ -41,7 +41,7 @@ import {
   resolveApproval,
 } from '../../../packages/shared/src/approvals.js';
 import { registerMcp } from './mcp.js';
-import { responseModel, modelSchemas } from './models.js';
+import { responseModel, modelSchemas, toOpenapiSchema } from './models.js';
 import {
   createArtifact,
   artifactInput,
@@ -157,6 +157,8 @@ export async function buildApp(logging = false) {
       schema: { type: 'string' },
     }));
     const responseSchema = responseModel(url, method);
+    const bodyName = (method + url + '_body').replace(/[^a-zA-Z0-9]/g, '_');
+    if (body) modelSchemas[bodyName] = toOpenapiSchema(body, bodyName);
     const querySchema =
       method === 'GET'
         ? url.endsWith('/events')
@@ -191,7 +193,11 @@ export async function buildApp(logging = false) {
         ? {
             requestBody: {
               required: true,
-              content: { 'application/json': { schema: z.toJSONSchema(body) } },
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/' + bodyName },
+                },
+              },
             },
           }
         : {}),
@@ -205,6 +211,27 @@ export async function buildApp(logging = false) {
         400: { description: 'Invalid request' },
         401: { description: 'Authentication required' },
         403: { description: 'Insufficient permission' },
+        422: {
+          description: 'Zod input validation rejected this request',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Error' },
+            },
+          },
+        },
+        429: { description: 'Request or login rate limit reached' },
+        ...(url === '/api/v1/health'
+          ? {
+              503: {
+                description: 'Database or worker unavailable',
+                content: {
+                  'application/json': {
+                    schema: { $ref: '#/components/schemas/Health' },
+                  },
+                },
+              },
+            }
+          : {}),
         409: {
           description: 'Version or state conflict',
           content: {

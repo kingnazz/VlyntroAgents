@@ -177,8 +177,33 @@ const models = {
     request_id: z.string(),
   }),
 };
-export const modelSchemas = Object.fromEntries(
-  Object.entries(models).map(([key, schema]) => [key, z.toJSONSchema(schema)]),
+export function toOpenapiSchema(
+  schema: z.ZodType,
+  name: string,
+): Record<string, unknown> {
+  function relocate(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(relocate);
+    if (value && typeof value === 'object')
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [
+          key,
+          key === '$ref' && typeof entry === 'string' && entry.startsWith('#/')
+            ? '#/components/schemas/' + name + entry.slice(1)
+            : relocate(entry),
+        ]),
+      );
+    return value;
+  }
+  return relocate(z.toJSONSchema(schema)) as Record<string, unknown>;
+}
+export const modelSchemas: Record<
+  string,
+  Record<string, unknown>
+> = Object.fromEntries(
+  Object.entries(models).map(([key, schema]) => [
+    key,
+    toOpenapiSchema(schema, key),
+  ]),
 );
 export function responseModel(
   url: string,

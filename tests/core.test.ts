@@ -167,6 +167,25 @@ describe('authentication and HTTP boundaries', () => {
     expect(
       spec.paths['/api/v1/state/{namespace}/{key}'].post.requestBody,
     ).toBeTruthy();
+    function verifyRefs(value: unknown) {
+      if (Array.isArray(value)) {
+        value.forEach(verifyRefs);
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      const object = value as Record<string, unknown>;
+      if (typeof object.$ref === 'string' && object.$ref.startsWith('#/')) {
+        let target: unknown = spec;
+        for (const segment of object.$ref
+          .slice(2)
+          .split('/')
+          .map((s) => s.replaceAll('~1', '/').replaceAll('~0', '~')))
+          target = (target as Record<string, unknown>)?.[segment];
+        expect(target, object.$ref).toBeDefined();
+      }
+      Object.values(object).forEach(verifyRefs);
+    }
+    verifyRefs(spec);
   });
 });
 describe('Blackboard, audit and policy', () => {

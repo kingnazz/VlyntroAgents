@@ -1,0 +1,1 @@
+17 3 * * * root /opt/vlyntro-agents/scripts/backup-postgres.sh >> /var/log/vlyntro-agents-backup.log 2>&1

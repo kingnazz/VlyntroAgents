@@ -1065,9 +1065,9 @@ export default function Console() {
           channels={data.channels}
           onClose={() => setNewTask(false)}
           onSaved={async () => {
-            setNewTask(false);
             await refresh();
             navigate('tasks');
+            setNewTask(false);
           }}
         />
       )}

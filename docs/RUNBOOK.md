@@ -2,7 +2,7 @@
 
 Production URL: [agents.vlyntro.com](https://agents.vlyntro.com). MCP: [agents.vlyntro.com/mcp](https://agents.vlyntro.com/mcp).
 
-VPS: `root@sales.arctechone.com`, port 22, dedicated local key `~/.ssh/id_ed25519_codex_sales`. Use an explicit port because local SSH aliases may differ. Deployment path: `/opt/vlyntro-agents`. Project name: `vlyntro-agents`. Do not operate on the unrelated `arcsales` or `coffee` Compose projects.
+VPS: `root@sales.arctechone.com`, port 2222, dedicated local key `~/.ssh/id_ed25519_codex_sales`. Use an explicit port because local SSH aliases may differ. Deployment path: `/opt/vlyntro-agents`. Project name: `vlyntro-agents`. Do not operate on the unrelated `arcsales` or `coffee` Compose projects.
 
 ## Services
 
