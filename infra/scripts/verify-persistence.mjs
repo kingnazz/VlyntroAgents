@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import console from 'node:console';
 import { readFile } from 'node:fs/promises';
 import postgres from 'postgres';
 const sql = postgres(process.env.DATABASE_URL, { onnotice: () => {} });
@@ -48,7 +49,7 @@ try {
     ).length,
     1,
   );
-  const health = await fetch('http://127.0.0.1:4000/api/v1/health');
+  const health = await globalThis.fetch('http://127.0.0.1:4000/api/v1/health');
   assert.equal(health.status, 200);
   console.info(
     'PASS restart persistence: owner, message, task, job, run, approval, Blackboard, migration, audit and worker health.',
