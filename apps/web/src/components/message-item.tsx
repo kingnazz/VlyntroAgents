@@ -5,9 +5,11 @@ import { AgentAvatar } from './ui';
 export function MessageItem({
   message: m,
   name,
+  timeLabel,
 }: {
   message: Message;
   name: string;
+  timeLabel?: string;
 }) {
   const event = String(m.metadata.event_type ?? m.metadata.action ?? '');
   const tone = event.includes('approval')
@@ -28,7 +30,7 @@ export function MessageItem({
           <span className="message-kind">
             {m.sender_type === 'user' ? 'human' : m.sender_type}
           </span>
-          <time dateTime={m.created_at}>{time(m.created_at)}</time>
+          <time dateTime={m.created_at}>{timeLabel ?? time(m.created_at)}</time>
         </header>
         <p>
           {m.body
@@ -46,7 +48,7 @@ export function MessageItem({
         {typeof m.metadata.task_id === 'string' && (
           <a
             className="message-link"
-            href={'/?view=task&id=' + m.metadata.task_id}
+            href={'/app?view=task&id=' + m.metadata.task_id}
           >
             <ListTodo size={12} />
             Linked task
@@ -56,7 +58,7 @@ export function MessageItem({
         {typeof m.metadata.run_id === 'string' && (
           <a
             className="message-link"
-            href={'/?view=run&id=' + m.metadata.run_id}
+            href={'/app?view=run&id=' + m.metadata.run_id}
           >
             <Zap size={12} />
             Linked run

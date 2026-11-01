@@ -145,7 +145,7 @@ export default function Console() {
     window.history.pushState(
       {},
       '',
-      `/?view=${view}${id ? '&id=' + encodeURIComponent(id) : ''}`,
+      `/app?view=${view}${id ? '&id=' + encodeURIComponent(id) : ''}`,
     );
   }, []);
   useEffect(() => {

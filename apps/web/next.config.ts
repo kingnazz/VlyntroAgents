@@ -15,6 +15,13 @@ const config: NextConfig = {
   async headers() {
     return [
       {
+        source: '/:path(app|login)',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+          { key: 'Cache-Control', value: 'private, no-store' },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },

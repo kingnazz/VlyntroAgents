@@ -1,6 +1,6 @@
-# Vlyntro Agent HQ
+# Vlyntro Agents
 
-A private operations workspace for Nazar and the Vlyntro agent team. Channels create work, PostgreSQL queues execution, and human decisions gate content approval. No public signup or external publishing integration is included.
+Vlyntro Agents is the public product; Agent HQ is its private operations workspace. The public site lives at `/`, secure sign-in at `/login`, and the authenticated command center at `/app`. Channels create work, PostgreSQL queues execution, and human decisions gate content approval. Request Access uses the existing [Vlyntro build inquiry](https://vlyntro.com/contact?build=Agent%20or%20workflow); there is no public signup or external publishing integration.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ flowchart LR
   Worker --> Command[Optional controlled Codex command]
 ```
 
-`apps/web` is the responsive dark console. `apps/api` owns authentication and all private operations. `apps/worker` runs the PostgreSQL job loop. `packages/shared` contains the policies used by REST, MCP and worker actions. `packages/db` contains parameterized PostgreSQL queries, checksummed SQL migrations and an idempotent structural seed. Redis and managed backend services are not required.
+`apps/web` contains the public product site and the responsive Agent HQ console. `apps/api` owns authentication and all private operations. `apps/worker` runs the PostgreSQL job loop. `packages/shared` contains the policies used by REST, MCP and worker actions. `packages/db` contains parameterized PostgreSQL queries, checksummed SQL migrations and an idempotent structural seed. Redis and managed backend services are not required.
 
 ## Local development
 

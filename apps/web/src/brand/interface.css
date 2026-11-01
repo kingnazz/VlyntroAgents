@@ -1676,6 +1676,7 @@ tbody tr:focus-within {
   padding: 42px 32px 24px;
 }
 .login-brand {
+  text-decoration: none;
   align-self: flex-start;
 }
 .login-panel {
@@ -1722,6 +1723,11 @@ tbody tr:focus-within {
   color: var(--vx-muted);
   margin-top: 23px;
   text-align: center;
+}
+.login-back {
+  display: inline-block;
+  font-size: 12px;
+  margin-top: 14px;
 }
 .login-shell > footer {
   display: flex;

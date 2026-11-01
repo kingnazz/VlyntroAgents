@@ -25,7 +25,7 @@ export default function Login() {
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.error?.message ?? 'Sign in failed.');
-      window.location.assign('/');
+      window.location.assign('/app');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Connection unavailable.');
     } finally {
@@ -34,9 +34,9 @@ export default function Login() {
   }
   return (
     <main className="login-shell">
-      <div className="login-brand">
+      <a className="login-brand" href="/" aria-label="Vlyntro Agents home">
         <Brand />
-      </div>
+      </a>
       <div className="login-panel">
         <div className="eyebrow">
           <LockKeyhole size={14} /> PRIVATE OPERATIONS
@@ -49,7 +49,9 @@ export default function Login() {
           </h1>
           <Mascot size={76} track={false} />
         </div>
-        <p className="muted">Sign in to your Vlyntro workspace.</p>
+        <p className="muted">
+          Sign in to Agent HQ, your Vlyntro Agents workspace.
+        </p>
         <form onSubmit={submit}>
           <label>
             Email address
@@ -83,6 +85,9 @@ export default function Login() {
         <p className="login-note">
           Private access. Contact your workspace owner to join.
         </p>
+        <a className="login-back" href="/">
+          Explore Vlyntro Agents
+        </a>
       </div>
       <footer>
         VLYNTRO AGENT HQ <span>HUMAN DIRECTION. AGENT EXECUTION.</span>

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { waitForApiBudget } from '../rate-budget.js';
 test('Vlyntro brand and every workspace view at five widths', async ({
   page,
   context,
@@ -17,6 +18,7 @@ test('Vlyntro brand and every workspace view at five widths', async ({
     if (m.type() === 'error') errors.push(m.text());
   });
   const results: unknown[] = [];
+  await waitForApiBudget(context.request);
   for (const width of [1440, 1280, 1024, 768, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('/login');
@@ -81,6 +83,7 @@ test('Vlyntro brand and every workspace view at five widths', async ({
   for (const width of [1440, 1280, 1024, 768, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const [name, label, heading] of views) {
+      await waitForApiBudget(context.request, 45);
       const menu = page.getByRole('button', { name: 'Open navigation' });
       if (await menu.isVisible()) await menu.click();
       await page.getByRole('button', { name: label, exact: true }).click();

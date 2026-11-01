@@ -61,12 +61,12 @@ export function ApprovalCard({
             {date(a.created_at)}
           </span>
           {a.task_id && (
-            <a href={'/?view=task&id=' + a.task_id}>
+            <a href={'/app?view=task&id=' + a.task_id}>
               Related task <ArrowUpRight size={12} />
             </a>
           )}
           {a.run_id && (
-            <a href={'/?view=run&id=' + a.run_id}>
+            <a href={'/app?view=run&id=' + a.run_id}>
               Related run <ArrowUpRight size={12} />
             </a>
           )}
