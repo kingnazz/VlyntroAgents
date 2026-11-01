@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 const config: NextConfig = {
   output: 'standalone',
   agentRules: false,
+  experimental: { cpus: 1 },
   poweredByHeader: false,
   async rewrites() {
     const api = process.env.API_INTERNAL_URL ?? 'http://127.0.0.1:4000';
