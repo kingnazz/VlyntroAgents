@@ -531,6 +531,19 @@ describe('agent scoping and messaging', () => {
       sql`INSERT INTO task_dependencies(task_id,depends_on_task_id) VALUES(${task.id},${task.id})`,
     ).rejects.toThrow();
   });
+  it('preserves a completed task timestamp when changing metadata', async () => {
+    const { updateTask } = await import('../packages/shared/src/work.js');
+    const task = await createTask(owner, {
+      workspace_id: workspace,
+      title: 'Completion timestamp test',
+    });
+    const completed = await updateTask(owner, task.id, { status: 'completed' });
+    const updated = await updateTask(owner, task.id, { priority: 4 });
+    expect(new Date(updated.completed_at).getTime()).toBe(
+      new Date(completed.completed_at).getTime(),
+    );
+    expect(updated.status).toBe('completed');
+  });
 });
 describe('worker execution and recovery', () => {
   it('does not recover a stale job while its execution session lock is held', async () => {

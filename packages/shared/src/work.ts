@@ -171,7 +171,7 @@ export async function updateTask(actor: Actor, id: string, input: unknown) {
       await validateAssignment(tx, data.assigned_agent_id, task.workspace_id);
     if (!Object.keys(data).length) return task;
     const [result] =
-      await tx`UPDATE tasks SET ${tx(data)},updated_at=now(),completed_at=${data.status === 'completed' ? new Date() : null} WHERE id=${id} RETURNING *`;
+      await tx`UPDATE tasks SET ${tx(data)},updated_at=now(),completed_at=${data.status === 'completed' ? (task.completed_at ?? new Date()) : data.status ? null : task.completed_at} WHERE id=${id} RETURNING *`;
     if (
       data.assigned_agent_id &&
       data.assigned_agent_id !== task.assigned_agent_id
