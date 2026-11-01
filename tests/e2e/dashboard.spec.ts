@@ -45,6 +45,10 @@ test('private dashboard, live message, navigation and responsive layout', async 
   await expect(
     page.getByRole('heading', { name: 'General', exact: true }),
   ).toBeVisible();
+  if (process.env.E2E_MCP_MESSAGE)
+    await expect(
+      page.getByText(process.env.E2E_MCP_MESSAGE, { exact: true }),
+    ).toBeVisible();
   const note = `Browser acceptance ${testInfo.project.name} ${Date.now()}`;
   await page.getByRole('textbox', { name: 'Message General' }).fill(note);
   await page.getByRole('button', { name: 'Send message' }).click();
@@ -94,11 +98,34 @@ test('private dashboard, live message, navigation and responsive layout', async 
   await menu();
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await page.getByRole('button', { name: 'New task', exact: true }).click();
-  await page
-    .getByLabel('Title', { exact: true })
-    .fill('Safe browser acceptance task ' + Date.now());
+  const taskTitle = 'Safe browser acceptance task ' + Date.now();
+  await page.getByLabel('Title', { exact: true }).fill(taskTitle);
   await page.getByRole('button', { name: 'Create task', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
+  const createdTasks = await (
+    await context.request.get('/api/v1/tasks')
+  ).json();
+  const createdTask = createdTasks.find(
+    (task: { title: string }) => task.title === taskTitle,
+  );
+  expect(createdTask).toBeTruthy();
+  const requestHeaders = {
+    Origin: process.env.APP_BASE_URL ?? 'http://localhost:3000',
+  };
+  const completed = await (
+    await context.request.patch('/api/v1/tasks/' + createdTask.id, {
+      headers: requestHeaders,
+      data: { status: 'completed' },
+    })
+  ).json();
+  const metadata = await (
+    await context.request.patch('/api/v1/tasks/' + createdTask.id, {
+      headers: requestHeaders,
+      data: { priority: 3 },
+    })
+  ).json();
+  expect(metadata.completed_at).toBe(completed.completed_at);
+  expect(metadata.completed_at).toBeTruthy();
   if (process.env.E2E_APPROVAL_ID) {
     await menu();
     await page.getByRole('button', { name: 'Approvals', exact: true }).click();
