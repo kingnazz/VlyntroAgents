@@ -15,6 +15,9 @@ test('private dashboard, live message, navigation and responsive layout', async 
 }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
   await page.goto('/');
   await expect(page).toHaveURL(/\/login/);
   const email = process.env.E2E_EMAIL ?? process.env.ADMIN_EMAIL;

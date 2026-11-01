@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Vlyntro Agent HQ database backup
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+Persistent=true
+Unit=vlyntro-agents-backup.service
+
+[Install]
+WantedBy=timers.target

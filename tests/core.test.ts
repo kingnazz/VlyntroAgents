@@ -533,6 +533,28 @@ describe('agent scoping and messaging', () => {
   });
 });
 describe('worker execution and recovery', () => {
+  it('does not recover a stale job while its execution session lock is held', async () => {
+    const [job] =
+      await sql`INSERT INTO jobs(workspace_id,agent_id,job_type,status,attempts,claimed_at) VALUES(${workspace},${chat.id},'recovery-test','running',1,now()-interval '20 minutes') RETURNING id`;
+    const connection = await sql.reserve();
+    const { recoverJobs } = await import('../apps/worker/src/queue.js');
+    try {
+      await connection`SELECT pg_advisory_lock(hashtextextended(${job.id},17))`;
+      await recoverJobs();
+      expect(
+        (await sql`SELECT status FROM jobs WHERE id=${job.id}`)[0].status,
+      ).toBe('running');
+      await connection`SELECT pg_advisory_unlock(hashtextextended(${job.id},17))`;
+      await recoverJobs();
+      expect(
+        (await sql`SELECT status FROM jobs WHERE id=${job.id}`)[0].status,
+      ).toBe('queued');
+    } finally {
+      await connection`SELECT pg_advisory_unlock_all()`;
+      connection.release();
+      await sql`UPDATE jobs SET status='cancelled' WHERE id=${job.id}`;
+    }
+  });
   it('grants one owner when two workers claim one job', async () => {
     await sql`UPDATE jobs SET status='cancelled' WHERE status='queued'`;
     await sql`INSERT INTO jobs(workspace_id,agent_id,job_type) VALUES(${workspace},${chat.id},'test')`;

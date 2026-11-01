@@ -60,7 +60,7 @@ While public DNS/TLS is pending, access the deployed stack through an encrypted 
 
 ## Back up and restore
 
-Daily backup: `/etc/cron.d/vlyntro-agents-backup`, 03:17 UTC. Location: `/opt/backups/vlyntro-agents`. Retention: 14 daily files. Logs: `/var/log/vlyntro-agents-backup.log`. Dumps are mode 600 and use PostgreSQL's custom format. The directory is separate from the active database volume.
+Daily backup: `vlyntro-agents-backup.timer`, 03:17 UTC. The dedicated systemd service avoids enabling the VPS's inactive global cron daemon. Location: `/opt/backups/vlyntro-agents`. Retention: 14 daily files. Logs: `/var/log/vlyntro-agents-backup.log`. Dumps are mode 600 and use PostgreSQL's custom format. The directory is separate from the active database volume. Check scheduling with `systemctl list-timers vlyntro-agents-backup.timer`; run the scheduled unit manually with `systemctl start vlyntro-agents-backup.service`.
 
 ```sh
 scripts/backup-postgres.sh

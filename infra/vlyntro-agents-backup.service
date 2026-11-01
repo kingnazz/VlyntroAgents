@@ -1,0 +1,12 @@
+[Unit]
+Description=Vlyntro Agent HQ PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/vlyntro-agents
+ExecStart=/opt/vlyntro-agents/scripts/backup-postgres.sh
+UMask=0077
+StandardOutput=append:/var/log/vlyntro-agents-backup.log
+StandardError=append:/var/log/vlyntro-agents-backup.log

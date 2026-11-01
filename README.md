@@ -142,10 +142,14 @@ On a fresh VPS with free ports, Caddy can terminate TLS instead. Use `infra/cadd
 
 ## Backups and recovery
 
-`scripts/backup-postgres.sh` uses `pg_dump -Fc`, a temporary file and an atomic rename. It retains 14 daily backups under `/opt/backups/vlyntro-agents`, outside the data volume. File mode is private. Install a root cron entry:
+`scripts/backup-postgres.sh` uses `pg_dump -Fc`, a temporary file and an atomic rename. It retains 14 daily backups under `/opt/backups/vlyntro-agents`, outside the data volume. File mode is private. The VPS uses a dedicated systemd timer because its global cron daemon is inactive:
 
-```cron
-17 3 * * * root /opt/vlyntro-agents/scripts/backup-postgres.sh >> /var/log/vlyntro-agents-backup.log 2>&1
+```sh
+install -m 644 infra/vlyntro-agents-backup.service /etc/systemd/system/
+install -m 644 infra/vlyntro-agents-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now vlyntro-agents-backup.timer
+systemctl list-timers vlyntro-agents-backup.timer
 ```
 
 Restore only into a new disposable database:
