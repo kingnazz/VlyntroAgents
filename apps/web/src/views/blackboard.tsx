@@ -4,6 +4,17 @@ import { api, date, mutation } from '../api';
 import type { Document, User, Event } from '../types';
 import { PageHeader as PageHeading, Panel } from '../components/ui';
 
+const coreMemoryKeys = [
+  'brand_bible',
+  'weekly_brief',
+  'pipeline',
+  'performance_log',
+];
+const keyOrder = (key: string) => {
+  const index = coreMemoryKeys.indexOf(key);
+  return index < 0 ? coreMemoryKeys.length : index;
+};
+
 export function Blackboard({
   user,
   onError,
@@ -57,22 +68,27 @@ export function Blackboard({
         description="Versioned context shared by agents, with every write audited."
       />
       <div className="blackboard-tabs">
-        {keys.map((k) => (
-          <button
-            className={selected === k.key ? 'active' : ''}
-            key={k.key}
-            onClick={() => setSelected(k.key)}
-          >
-            <small>VLYNTRO-IG</small>
-            {k.key.replaceAll('_', ' ')}
-            <span>v{k.version}</span>
-            <em>
-              {date(k.updated_at)}
-              <br />
-              Editor {k.updated_by.slice(0, 12)}
-            </em>
-          </button>
-        ))}
+        {[...keys]
+          .sort(
+            (a, b) =>
+              keyOrder(a.key) - keyOrder(b.key) || a.key.localeCompare(b.key),
+          )
+          .map((k) => (
+            <button
+              className={selected === k.key ? 'active' : ''}
+              key={k.key}
+              onClick={() => setSelected(k.key)}
+            >
+              <small>VLYNTRO-IG</small>
+              {k.key.replaceAll('_', ' ')}
+              <span>v{k.version}</span>
+              <em>
+                {date(k.updated_at)}
+                <br />
+                Editor {k.updated_by.slice(0, 12)}
+              </em>
+            </button>
+          ))}
       </div>
       {doc && (
         <Panel

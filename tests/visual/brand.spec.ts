@@ -90,8 +90,10 @@ test('Vlyntro brand and every workspace view at five widths', async ({
       await expect(
         page.getByText('Live connection', { exact: true }),
       ).toBeAttached();
-      if (name === 'blackboard')
+      if (name === 'blackboard') {
         await expect(page.getByLabel('Document JSON')).toBeVisible();
+        await expect(page.locator('.blackboard-tabs .active')).toBeInViewport();
+      }
       if (['chatgpt', 'muse', 'codex', 'grokbot'].includes(name))
         await expect(
           page.getByRole('heading', {
