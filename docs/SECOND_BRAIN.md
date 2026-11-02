@@ -1,5 +1,7 @@
 # Second Brain V1
 
+Deployment and acceptance evidence: [Second Brain production verification](SECOND_BRAIN_RELEASE.md).
+
 Agent HQ now combines the AI team, durable shared knowledge, and its existing operational controls. This is an additive PostgreSQL feature. Blackboard remains operational state; Brain holds individually attributable facts, notes, observations, decisions, preferences, ideas, and references. There are no embeddings, external search services, or external connectors.
 
 ## Everyday use
