@@ -1,6 +1,8 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 import { ArrowUpRight, LockKeyhole } from 'lucide-react';
+import { Brand } from './brand/BrandLockup';
+import { Mascot } from './brand/Mascot';
 export default function Login() {
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -23,7 +25,7 @@ export default function Login() {
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.error?.message ?? 'Sign in failed.');
-      window.location.assign('/');
+      window.location.assign('/app');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Connection unavailable.');
     } finally {
@@ -32,24 +34,24 @@ export default function Login() {
   }
   return (
     <main className="login-shell">
-      <div className="login-brand">
-        <div className="brand-symbol">
-          V<span>.</span>
-        </div>
-        <span>
-          VLYNTRO<span className="muted"> / AGENT HQ</span>
-        </span>
-      </div>
+      <a className="login-brand" href="/" aria-label="Vlyntro Agents home">
+        <Brand />
+      </a>
       <div className="login-panel">
         <div className="eyebrow">
           <LockKeyhole size={14} /> PRIVATE OPERATIONS
         </div>
-        <h1>
-          Your agents.
-          <br />
-          One command center.
-        </h1>
-        <p className="muted">Sign in to your Vlyntro workspace.</p>
+        <div className="login-welcome">
+          <h1>
+            Your AI team,
+            <br />
+            in one place<span className="heading-dot">.</span>
+          </h1>
+          <Mascot size={76} track={false} />
+        </div>
+        <p className="muted">
+          Sign in to Agent HQ, your Vlyntro Agents workspace.
+        </p>
         <form onSubmit={submit}>
           <label>
             Email address
@@ -81,10 +83,11 @@ export default function Login() {
           </button>
         </form>
         <p className="login-note">
-          Access is provisioned by your workspace owner.
-          <br />
-          There is no public registration.
+          Private access. Contact your workspace owner to join.
         </p>
+        <a className="login-back" href="/">
+          Explore Vlyntro Agents
+        </a>
       </div>
       <footer>
         VLYNTRO AGENT HQ <span>HUMAN DIRECTION. AGENT EXECUTION.</span>

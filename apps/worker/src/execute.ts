@@ -19,6 +19,9 @@ import {
   redactOutput,
 } from '../../../packages/shared/src/providers.js';
 import { retryDelay } from './queue.js';
+import { buildBrainContext } from '../../../packages/shared/src/brain/retrieval.js';
+import { createMemory } from '../../../packages/shared/src/brain/items.js';
+import { agentOutput } from '../../../packages/shared/src/providers.js';
 type Job = {
   id: string;
   workspace_id: string;
@@ -34,7 +37,13 @@ type Job = {
     approval_id?: string;
   };
 };
-export async function executeJob(job: Job, provider = generate) {
+export async function executeJob(
+  job: Job,
+  provider: (
+    agent: AgentConfig,
+    context: unknown,
+  ) => Promise<unknown> = generate,
+) {
   const [agentRow] = await sql`SELECT * FROM agents WHERE id=${job.agent_id}`;
   const agent = agentRow as unknown as AgentConfig;
   const actor: Actor = { type: 'agent', id: job.agent_id, slug: agent.slug };
@@ -96,13 +105,25 @@ export async function executeJob(job: Job, provider = generate) {
             note: 'Document exceeds bounded context. Read and edit through MCP with version checking.',
           },
     );
+    const [projectLink] = job.task_id
+      ? await sql`SELECT CASE WHEN from_type='project' THEN from_id ELSE to_id END AS project_id FROM entity_links WHERE workspace_id=${job.workspace_id} AND ((from_type='task' AND from_id=${job.task_id} AND to_type='project') OR (to_type='task' AND to_id=${job.task_id} AND from_type='project')) LIMIT 1`
+      : [];
+    const brain = await buildBrainContext(actor, {
+      workspace_id: job.workspace_id,
+      query: [job.payload.instruction, task?.title, task?.description]
+        .filter(Boolean)
+        .join(' ')
+        .slice(0, 4000),
+      channel_id: job.payload.channel_id,
+      project_id: projectLink?.project_id,
+    });
     const approvals = job.task_id
       ? await sql`SELECT id,status,approval_type,title FROM approvals WHERE task_id=${job.task_id} ORDER BY created_at DESC LIMIT 5`
       : [];
     await record(
       'Load bounded context',
       'completed',
-      `${messages.length} recent messages, ${documents.length} authorized documents, ${approvals.length} approval records.`,
+      `${brain.items.length} attributed memories, ${messages.length} recent messages, ${documents.length} authorized documents, ${approvals.length} approval records.`,
     );
     if (job.payload.approval_id) {
       const [approval] =
@@ -131,16 +152,19 @@ export async function executeJob(job: Job, provider = generate) {
         );
       summary = result.summary;
     } else {
-      const output = await provider(agent, {
-        workspace,
-        task,
-        instruction: job.payload.instruction,
-        messages: messages
-          .reverse()
-          .map((m) => ({ ...m, body: m.body.slice(0, 2000) })),
-        blackboard: boundedDocs,
-        approvals,
-      });
+      const output = agentOutput.parse(
+        await provider(agent, {
+          workspace,
+          task,
+          instruction: job.payload.instruction,
+          messages: messages
+            .reverse()
+            .map((m) => ({ ...m, body: m.body.slice(0, 2000) })),
+          brain,
+          blackboard: boundedDocs,
+          approvals,
+        }),
+      );
       await record(
         'Generate structured agent response',
         'completed',
@@ -166,6 +190,53 @@ export async function executeJob(job: Job, provider = generate) {
         });
         waiting = true;
         await record('Request human approval');
+      }
+      for (const proposal of output.brain_proposals) {
+        try {
+          await createMemory(actor, {
+            workspace_id: job.workspace_id,
+            kind: proposal.kind,
+            title: proposal.title,
+            body: proposal.body,
+            importance: proposal.importance,
+            source_type: 'run',
+            source_id: run.id,
+            links: [
+              ...proposal.project_refs.map((id) => ({
+                target_type: 'project',
+                target_id: id,
+                relation: 'ABOUT',
+              })),
+              ...proposal.person_refs.map((id) => ({
+                target_type: 'person',
+                target_id: id,
+                relation: 'ABOUT',
+              })),
+              ...(job.task_id
+                ? [
+                    {
+                      target_type: 'task',
+                      target_id: job.task_id,
+                      relation: 'RESULT',
+                    },
+                  ]
+                : []),
+              ...(job.payload.channel_id
+                ? [
+                    {
+                      target_type: 'channel',
+                      target_id: job.payload.channel_id,
+                      relation: 'SOURCE',
+                    },
+                  ]
+                : []),
+            ],
+          });
+          await record('Contribute attributed Brain memory');
+        } catch (error) {
+          if (!(error instanceof AppError) || error.status >= 500) throw error;
+          await record('Brain proposal withheld', 'completed', error.code);
+        }
       }
       summary = redactOutput(safeText(output.message));
     }

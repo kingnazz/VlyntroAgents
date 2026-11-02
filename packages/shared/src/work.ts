@@ -85,60 +85,58 @@ export async function listScoped(
 }
 export async function createTask(actor: Actor, input: unknown) {
   const data = taskInput.parse(input);
-  return sql.begin(async (tx) => {
-    await authorize(tx, actor, 'tasks.write', { workspace: data.workspace_id });
-    if (data.channel_id) {
-      const channel = await channelInfo(
-        tx,
-        actor,
-        data.channel_id,
-        'messages.read',
+  return sql.begin((tx) => createTaskInTx(tx, actor, data));
+}
+export async function createTaskInTx(tx: Query, actor: Actor, input: unknown) {
+  const data = taskInput.parse(input);
+  await authorize(tx, actor, 'tasks.write', { workspace: data.workspace_id });
+  if (data.channel_id) {
+    const channel = await channelInfo(
+      tx,
+      actor,
+      data.channel_id,
+      'messages.read',
+    );
+    if (channel.workspace_id !== data.workspace_id)
+      fail(422, 'workspace_mismatch', 'Channel belongs to another workspace.');
+  }
+  for (const id of [
+    ...data.dependencies,
+    ...(data.parent_task_id ? [data.parent_task_id] : []),
+  ]) {
+    const related = await scopedRow(tx, actor, 'tasks', id, 'tasks.read');
+    if (related.workspace_id !== data.workspace_id)
+      fail(
+        422,
+        'workspace_mismatch',
+        'Related task belongs to another workspace.',
       );
-      if (channel.workspace_id !== data.workspace_id)
-        fail(
-          422,
-          'workspace_mismatch',
-          'Channel belongs to another workspace.',
-        );
-    }
-    for (const id of [
-      ...data.dependencies,
-      ...(data.parent_task_id ? [data.parent_task_id] : []),
-    ]) {
-      const related = await scopedRow(tx, actor, 'tasks', id, 'tasks.read');
-      if (related.workspace_id !== data.workspace_id)
-        fail(
-          422,
-          'workspace_mismatch',
-          'Related task belongs to another workspace.',
-        );
-    }
-    if (data.assigned_agent_id)
-      await validateAssignment(tx, data.assigned_agent_id, data.workspace_id);
-    const [task] =
-      await tx`INSERT INTO tasks(workspace_id,channel_id,title,description,status,priority,created_by_type,created_by_id,assigned_agent_id,parent_task_id,due_at)
+  }
+  if (data.assigned_agent_id)
+    await validateAssignment(tx, data.assigned_agent_id, data.workspace_id);
+  const [task] =
+    await tx`INSERT INTO tasks(workspace_id,channel_id,title,description,status,priority,created_by_type,created_by_id,assigned_agent_id,parent_task_id,due_at)
    VALUES(${data.workspace_id},${data.channel_id ?? null},${data.title},${data.description},${data.assigned_agent_id ? 'queued' : 'backlog'},${data.priority},${actor.type},${actor.id},${data.assigned_agent_id ?? null},${data.parent_task_id ?? null},${data.due_at ?? null}) RETURNING *`;
-    for (const id of data.dependencies)
-      await tx`INSERT INTO task_dependencies(task_id,depends_on_task_id) VALUES(${task.id},${id})`;
-    if (data.assigned_agent_id)
-      await tx`INSERT INTO jobs(workspace_id,task_id,agent_id,job_type,payload,idempotency_key) VALUES(${data.workspace_id},${task.id},${data.assigned_agent_id},'task',${tx.json({ instruction: data.description || data.title, depth: 0 })},${'task:' + task.id})`;
+  for (const id of data.dependencies)
+    await tx`INSERT INTO task_dependencies(task_id,depends_on_task_id) VALUES(${task.id},${id})`;
+  if (data.assigned_agent_id)
+    await tx`INSERT INTO jobs(workspace_id,task_id,agent_id,job_type,payload,idempotency_key) VALUES(${data.workspace_id},${task.id},${data.assigned_agent_id},'task',${tx.json({ instruction: data.description || data.title, depth: 0 })},${'task:' + task.id})`;
+  await audit(
+    tx,
+    actor,
+    'task.created',
+    { workspace: task.workspace_id },
+    { task_id: task.id },
+  );
+  if (data.assigned_agent_id)
     await audit(
       tx,
       actor,
-      'task.created',
+      'task.assigned',
       { workspace: task.workspace_id },
-      { task_id: task.id },
+      { task_id: task.id, agent_id: data.assigned_agent_id },
     );
-    if (data.assigned_agent_id)
-      await audit(
-        tx,
-        actor,
-        'task.assigned',
-        { workspace: task.workspace_id },
-        { task_id: task.id, agent_id: data.assigned_agent_id },
-      );
-    return task;
-  });
+  return task;
 }
 async function validateAssignment(db: Query, agent: string, workspace: string) {
   const [row] =

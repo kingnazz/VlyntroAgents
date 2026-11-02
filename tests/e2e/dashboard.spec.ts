@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { waitForApiBudget } from '../rate-budget.js';
+test.beforeEach(async ({ context }) => {
+  test.setTimeout(120000);
+  await waitForApiBudget(context.request);
+});
 test.afterEach(async ({ page }) => {
   await page
     .locator('input[type="password"]')
@@ -18,7 +23,7 @@ test('private dashboard, live message, navigation and responsive layout', async 
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page).toHaveURL(/\/login/);
   const email = process.env.E2E_EMAIL ?? process.env.ADMIN_EMAIL;
   const password = process.env.E2E_PASSWORD ?? process.env.ADMIN_PASSWORD;
@@ -29,12 +34,10 @@ test('private dashboard, live message, navigation and responsive layout', async 
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Enter workspace' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole('heading', { name: 'Today.' })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Command Center.' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Agent roster' }),
+    page.getByRole('heading', { name: 'Your agents' }),
   ).toBeVisible();
   const menu = async () => {
     const button = page.getByRole('button', { name: 'Open navigation' });

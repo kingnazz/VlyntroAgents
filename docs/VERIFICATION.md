@@ -1,5 +1,7 @@
 # Verification record
 
+The latest additive release is documented in [Second Brain production verification](SECOND_BRAIN_RELEASE.md). The record below preserves the original Agent HQ deployment acceptance evidence.
+
 Verified October 31, 2026, Pacific time. Application image release: `d031288`. Later documentation and verification-script commits do not change the running application code. The VPS checkout tracks `codex/agent-hq`.
 
 ## Deployment

@@ -1,8 +1,55 @@
 import { z } from 'zod';
+import {
+  itemInput,
+  projectInput,
+  personInput,
+  organizationInput,
+  linkInput,
+} from '../../../packages/shared/src/brain/schemas.js';
 const id = z.uuid(),
   timestamp = z.iso.datetime(),
   object = z.record(z.string(), z.json());
 const base = { id, created_at: timestamp };
+const brainItem = itemInput
+  .omit({ links: true })
+  .extend({
+    ...base,
+    status: z.enum(['proposed', 'active', 'superseded', 'archived']),
+    created_by_type: z.enum(['user', 'agent']),
+    created_by_id: id,
+    source_type: z.string(),
+    source_id: id.nullable(),
+    revision_number: z.number().int(),
+    updated_at: timestamp,
+    supersedes_id: id.nullable(),
+    author_name: z.string().optional(),
+    links: z.array(linkInput.passthrough()).optional(),
+  })
+  .passthrough();
+const capture = z
+  .object({
+    ...base,
+    workspace_id: id,
+    raw_text: z.string(),
+    status: z.enum([
+      'new',
+      'processing',
+      'processed',
+      'needs_review',
+      'failed',
+      'archived',
+    ]),
+    captured_by_type: z.string(),
+    captured_by_id: id,
+    source_type: z.string(),
+    source_id: id.nullable(),
+    processing_agent_id: id.nullable(),
+    processing_error: z.string().nullable(),
+    parsed_result: z.json().nullable(),
+    processed_at: timestamp.nullable(),
+    sensitive: z.boolean(),
+  })
+  .passthrough();
 const task = z
   .object({
     ...base,
@@ -22,6 +69,24 @@ const task = z
   })
   .passthrough();
 const models = {
+  BrainItem: brainItem,
+  BrainCapture: capture,
+  BrainRevision: z.object({
+    ...base,
+    brain_item_id: id,
+    revision_number: z.number().int(),
+    snapshot: z.json(),
+    changed_by_type: z.string(),
+    changed_by_id: id,
+    change_reason: z.string().nullable(),
+  }),
+  Project: projectInput
+    .extend({ ...base, updated_at: timestamp })
+    .passthrough(),
+  Person: personInput.extend({ ...base, updated_at: timestamp }).passthrough(),
+  Organization: organizationInput
+    .extend({ ...base, updated_at: timestamp })
+    .passthrough(),
   User: z.object({
     id,
     email: z.email().optional(),
@@ -212,6 +277,39 @@ export function responseModel(
 ): Record<string, unknown> {
   const ref = (name: string) => ({ $ref: '#/components/schemas/' + name });
   const list = (name: string) => ({ type: 'array', items: ref(name) });
+  if (url === '/api/v1/brain/search')
+    return {
+      type: 'object',
+      properties: {
+        items: list('BrainItem'),
+        next_cursor: { type: ['integer', 'null'] },
+        projects: list('Project'),
+        people: list('Person'),
+        organizations: list('Organization'),
+      },
+      required: ['items', 'next_cursor', 'projects', 'people', 'organizations'],
+    };
+  if (url === '/api/v1/brain/capture') return ref('BrainCapture');
+  if (url === '/api/v1/brain/inbox')
+    return {
+      type: 'object',
+      properties: {
+        captures: list('BrainCapture'),
+        proposals: list('BrainItem'),
+      },
+      required: ['captures', 'proposals'],
+    };
+  if (url.endsWith('/revisions')) return list('BrainRevision');
+  if (url.startsWith('/api/v1/brain/items')) return ref('BrainItem');
+  for (const [path, name] of [
+    ['projects', 'Project'],
+    ['people', 'Person'],
+    ['organizations', 'Organization'],
+  ])
+    if (url.startsWith('/api/v1/' + path))
+      return method === 'GET' && url === '/api/v1/' + path
+        ? list(name)
+        : ref(name);
   if (url.endsWith('/health')) return ref('Health');
   if (url.endsWith('/login') || url.endsWith('/me')) return ref('User');
   if (url.endsWith('/logout'))

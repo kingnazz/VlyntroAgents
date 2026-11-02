@@ -1,6 +1,6 @@
-# Vlyntro Agent HQ
+# Vlyntro Agents
 
-A private operations workspace for Nazar and the Vlyntro agent team. Channels create work, PostgreSQL queues execution, and human decisions gate content approval. No public signup or external publishing integration is included.
+Vlyntro Agents is the public product; Agent HQ is its private operations workspace. The public site lives at `/`, secure sign-in at `/login`, and the authenticated command center at `/app`. Channels create work, PostgreSQL queues execution, and human decisions gate content approval. Request Access uses the existing [Vlyntro build inquiry](https://vlyntro.com/contact?build=Agent%20or%20workflow); there is no public signup or external publishing integration.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ flowchart LR
   Worker --> Command[Optional controlled Codex command]
 ```
 
-`apps/web` is the responsive dark console. `apps/api` owns authentication and all private operations. `apps/worker` runs the PostgreSQL job loop. `packages/shared` contains the policies used by REST, MCP and worker actions. `packages/db` contains parameterized PostgreSQL queries, checksummed SQL migrations and an idempotent structural seed. Redis and managed backend services are not required.
+`apps/web` contains the public product site and the responsive Agent HQ console. `apps/api` owns authentication and all private operations. `apps/worker` runs the PostgreSQL job loop. `packages/shared` contains the policies used by REST, MCP and worker actions. `packages/db` contains parameterized PostgreSQL queries, checksummed SQL migrations and an idempotent structural seed. Redis and managed backend services are not required.
 
 ## Local development
 
@@ -71,6 +71,12 @@ See [.env.example](.env.example). Production uses an uncommitted `.env.productio
 | `IMAGE_TAG`                                                  | Release image tag; defaults to `local`                                   |
 
 Sessions use 256-bit random opaque tokens with SHA-256 hashes in PostgreSQL. There is no signing key or `SESSION_SECRET` because sessions are looked up server-side. Production cookies are HttpOnly, Secure and SameSite Strict. Cookie mutations require the exact same-origin Origin header. No cross-origin CORS access is enabled.
+
+## Second Brain
+
+Agent HQ now opens on **Today** and includes Memory, Projects, People, Decisions, Brain Inbox, and organizations. Use **Capture** or **Cmd+K / Ctrl+K** to save raw context immediately; provider-independent manual editing/search/linking is always available. Save messages, tasks, runs and artifacts to Brain from their existing views. PostgreSQL-native retrieval supplies bounded, attributed context to authorized agents. AI decisions/preferences require human confirmation, and every meaningful memory change preserves revisions and audit history.
+
+See [Second Brain V1](docs/SECOND_BRAIN.md) for the data model, permissions, capture lifecycle, search, REST/MCP tools, privacy safeguards, troubleshooting and future work. Migration `002_second_brain.sql` is additive; back up and verify a nonzero dump before applying it in production. Existing full PostgreSQL backups include Brain data automatically.
 
 ## First content workflow
 

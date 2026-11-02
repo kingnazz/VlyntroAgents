@@ -34,6 +34,22 @@ Keep `.env.production` mode 600. Do not run `docker compose config` into a trans
 
 For one-shot owner creation or production acceptance, combine a separate protected bootstrap env file with `compose.admin.yaml`. Use that override only with `run --rm`, then remove the server bootstrap file after the acceptance checks. The normal API and worker environment must not retain the owner password.
 
+### Frontend-only releases
+
+For a UI-only change with no API, worker, schema, or dependency changes, keep `IMAGE_TAG` on the existing runtime release and set `WEB_IMAGE_TAG` to the new immutable Git tag in the protected `.env.production` file. The web tag falls back to `IMAGE_TAG` when unset.
+
+Run `COMPOSE_PARALLEL_LIMIT=1 dc build web`, then `dc up -d --no-deps --wait web`. Do not run migrations, seed data, or recreate other services for a frontend release. Verify login, fonts/icons, navigation, messages, approval state, mobile layout, and SSE. Compare API/worker/PostgreSQL container IDs before and after.
+
+For a frontend-only rollback, restore the previous `WEB_IMAGE_TAG` and run `dc up -d --no-deps --wait web`. Keep both web images until the new release is verified.
+
+## Second Brain releases
+
+Follow [Second Brain V1](SECOND_BRAIN.md). Migration `002_second_brain.sql` adds eight tables and workspace-scoped grants; leave `001_initial.sql` unchanged. Before migration, run the existing backup, check the printed path with `test -s`, record its size, and record existing table counts and app/other-service container IDs. Apply the migration using the newly built runtime image. Recreate only `api`, `worker`, and `web`; leave PostgreSQL, routing and unrelated projects intact. Verify existing data counts, health, login, Today, every Brain view, capture/search, Messages, Tasks, Approvals, Runs, Blackboard, MCP and SSE. A harmless owner architecture decision must survive an Agent HQ restart and appear in the next backup/restore validation.
+
+Pending captures remain usable without provider keys. Failed processing appears in Brain Inbox with a safe error. Retry after fixing provider configuration; do not overwrite raw text. Ambiguous people require **Resolve match**. Incorrect memory should be edited with a reason or superseded from its detail view; source and revisions remain available. Secret-like captures are held for human review and cannot be retried into a provider. Only a redacted manual memory should be saved from those records.
+
+All Brain data is in the existing database dump; no new volume or backup job is needed. Retain the previous runtime/web image tags for rollback against the additive schema. Do not delete Brain tables or migration records during an application rollback.
+
 ## Roll back
 
 Use an existing reviewed previous commit and its immutable image tag. Recreate only app services against compatible migrations. Database migrations are forward-only and checked. If a schema rollback is needed, stop Agent HQ writers, restore a backup to a new database, verify it, and plan a DATABASE_URL cutover. Never restore over the active data volume. Keep the failed release available for diagnosis and do not reset unrelated work.
