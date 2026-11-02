@@ -20,6 +20,7 @@ import {
   Users,
   Inbox,
   GitBranch,
+  Link2,
 } from 'lucide-react';
 import { Brand } from '../brand/BrandLockup';
 import type { Agent, Channel, User, Workspace } from '../types';
@@ -183,6 +184,8 @@ export function Sidebar({
           {nav('decisions', 'Decisions', <GitBranch size={17} />)}
           {user.role !== 'viewer' &&
             nav('inbox', 'Brain Inbox', <Inbox size={17} />)}
+          {['owner', 'admin'].includes(user.role) &&
+            nav('connections', 'Connect your AI', <Link2 size={17} />)}
           <div className="nav-section">MESSAGES</div>
           {channels.map((c) =>
             nav('channel', c.name, <Hash size={17} />, c.id),

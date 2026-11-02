@@ -1,4 +1,6 @@
 import { registerBrainRoutes, brainQuerySchema } from './brain.js';
+import { registerOAuth, isOAuthProtocolPath } from './oauth.js';
+import { registerConnections } from './connections.js';
 import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -52,7 +54,10 @@ declare module 'fastify' {
     actor: Actor;
   }
 }
-const base = process.env.APP_BASE_URL ?? 'http://localhost:3000';
+const base = (process.env.APP_BASE_URL ?? 'http://localhost:3000').replace(
+  /\/$/,
+  '',
+);
 const production = process.env.NODE_ENV === 'production';
 const page = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(100),
@@ -75,8 +80,14 @@ const eventFilter = z.object({
     .optional(),
 });
 export async function authenticate(req: FastifyRequest): Promise<Actor> {
-  if (req.headers.authorization?.startsWith('Bearer '))
-    return authenticateToken(sql, req.headers.authorization.slice(7));
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    const actor = await authenticateToken(
+      sql,
+      req.headers.authorization.slice(7),
+      req.url.split('?')[0] === '/mcp' ? base.replace(/\/$/, '') + '/mcp' : '',
+    );
+    return actor;
+  }
   const token = req.cookies.hq_session;
   if (!token) return fail(401, 'unauthenticated', 'Please sign in.');
   const [session] =
@@ -206,9 +217,16 @@ export async function buildApp(logging = false) {
       responses: {
         200: {
           description: 'Success',
-          content: url.endsWith('/download')
-            ? { 'text/plain': { schema: { type: 'string' } } }
-            : { 'application/json': { schema: responseSchema } },
+          content: url.endsWith('.zip')
+            ? {
+                'application/zip': {
+                  schema: { type: 'string', format: 'binary' },
+                },
+              }
+            : url.endsWith('/download') ||
+                url.startsWith('/api/v1/connections/setup/')
+              ? { 'text/plain': { schema: { type: 'string' } } }
+              : { 'application/json': { schema: responseSchema } },
         },
         400: { description: 'Invalid request' },
         401: { description: 'Authentication required' },
@@ -266,27 +284,65 @@ export async function buildApp(logging = false) {
   });
   app.addHook('onRequest', async (req, reply) => {
     reply.header('X-Request-ID', req.id);
+    const path = req.url.split('?')[0];
+    const protocol = isOAuthProtocolPath(path);
+    const setup =
+      ['GET', 'HEAD'].includes(req.method) &&
+      (path.startsWith('/api/v1/connections/setup/') ||
+        [
+          '/api/v1/connections/skill.zip',
+          '/api/v1/connections/plugin.zip',
+        ].includes(path));
+    if (protocol) return;
+    if (path === '/mcp') {
+      reply
+        .header('Access-Control-Allow-Origin', '*')
+        .header('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS')
+        .header(
+          'Access-Control-Allow-Headers',
+          'Authorization, Content-Type, Accept, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID',
+        )
+        .header(
+          'Access-Control-Expose-Headers',
+          'WWW-Authenticate, MCP-Session-Id, MCP-Protocol-Version',
+        )
+        .header('Cache-Control', 'no-store');
+      if (req.method === 'OPTIONS') return reply.code(204).send();
+    }
     if (
       [
         '/api/v1/brain/',
         '/api/v1/projects',
         '/api/v1/people',
         '/api/v1/organizations',
+        '/api/v1/connections',
       ].some((path) => req.url.startsWith(path))
     )
       reply.header('Cache-Control', 'private, no-store');
-    if (req.headers.origin && req.headers.origin !== base)
+    if (req.headers.origin && req.headers.origin !== base && path !== '/mcp')
       fail(403, 'invalid_origin', 'Cross-origin requests are not accepted.');
     const publicRoute = [
       '/api/v1/health',
       '/api/v1/auth/login',
       '/api/v1/openapi.json',
     ].includes(req.url.split('?')[0]);
-    if (!publicRoute) req.actor = await authenticate(req);
+    if (!publicRoute && !setup) {
+      try {
+        req.actor = await authenticate(req);
+      } catch (error) {
+        if (path === '/mcp')
+          reply.header(
+            'WWW-Authenticate',
+            `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp", scope="brain.read brain.propose offline_access"`,
+          );
+        throw error;
+      }
+    }
     if (
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       !req.headers.authorization &&
-      req.headers.origin !== base
+      req.headers.origin !== base &&
+      !setup
     )
       fail(403, 'csrf', 'Same-origin Origin header required.');
   });
@@ -471,7 +527,7 @@ export async function buildApp(logging = false) {
        (SELECT title FROM tasks t WHERE t.assigned_agent_id=a.id AND t.status='running'
         AND (${req.actor.type === 'user'} OR EXISTS(SELECT 1 FROM agent_permissions p WHERE p.agent_id=${req.actor.id} AND p.workspace_id=t.workspace_id AND p.permission='tasks.read'))
         AND (t.channel_id IS NULL OR NOT EXISTS(SELECT 1 FROM channels c WHERE c.id=t.channel_id AND c.channel_type IN ('private','direct')) OR EXISTS(SELECT 1 FROM channel_members cm WHERE cm.channel_id=t.channel_id AND cm.member_type=${req.actor.type} AND cm.member_id=${req.actor.id})) LIMIT 1) AS current_task
-       FROM agents a ORDER BY a.created_at,a.slug`;
+       FROM agents a WHERE NOT EXISTS(SELECT 1 FROM ai_connections WHERE agent_id=a.id) ORDER BY a.created_at,a.slug`;
     },
   );
   route(
@@ -893,6 +949,8 @@ export async function buildApp(logging = false) {
     true,
   );
   registerBrainRoutes(route);
+  registerConnections(route);
+  await registerOAuth(app);
   await registerMcp(app);
   return app;
 }

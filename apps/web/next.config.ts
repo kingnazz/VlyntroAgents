@@ -10,12 +10,24 @@ const config: NextConfig = {
     return [
       { source: '/api/:path*', destination: api + '/api/:path*' },
       { source: '/mcp', destination: api + '/mcp' },
+      { source: '/oauth/:path*', destination: api + '/oauth/:path*' },
+      {
+        source: '/.well-known/:path*',
+        destination: api + '/.well-known/:path*',
+      },
     ];
   },
   async headers() {
     return [
       {
         source: '/:path(app|login)',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+          { key: 'Cache-Control', value: 'private, no-store' },
+        ],
+      },
+      {
+        source: '/connect/:path*',
         headers: [
           { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
           { key: 'Cache-Control', value: 'private, no-store' },

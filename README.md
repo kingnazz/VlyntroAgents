@@ -70,13 +70,15 @@ See [.env.example](.env.example). Production uses an uncommitted `.env.productio
 | `API_INTERNAL_URL`                                           | Web server connection to API; Docker uses `http://api:4000`              |
 | `IMAGE_TAG`                                                  | Release image tag; defaults to `local`                                   |
 
-Sessions use 256-bit random opaque tokens with SHA-256 hashes in PostgreSQL. There is no signing key or `SESSION_SECRET` because sessions are looked up server-side. Production cookies are HttpOnly, Secure and SameSite Strict. Cookie mutations require the exact same-origin Origin header. No cross-origin CORS access is enabled.
+Sessions use 256-bit random opaque tokens with SHA-256 hashes in PostgreSQL. There is no signing key or `SESSION_SECRET` because sessions are looked up server-side. Production cookies are HttpOnly, Secure and SameSite Strict. Cookie mutations require the exact same-origin Origin header. OAuth discovery/protocol endpoints and bearer-authenticated MCP support credential-free CORS for external AI clients; dashboard cookie access remains same-origin.
 
 ## Second Brain
 
 Agent HQ now opens on **Today** and includes Memory, Projects, People, Decisions, Brain Inbox, and organizations. Use **Capture** or **Cmd+K / Ctrl+K** to save raw context immediately; provider-independent manual editing/search/linking is always available. Save messages, tasks, runs and artifacts to Brain from their existing views. PostgreSQL-native retrieval supplies bounded, attributed context to authorized agents. AI decisions/preferences require human confirmation, and every meaningful memory change preserves revisions and audit history.
 
 See [Second Brain V1](docs/SECOND_BRAIN.md) for the data model, permissions, capture lifecycle, search, REST/MCP tools, privacy safeguards, troubleshooting and future work. Migration `002_second_brain.sql` is additive; back up and verify a nonzero dump before applying it in production. Existing full PostgreSQL backups include Brain data automatically.
+
+Use **Brain → Connect your AI** or `/connect` for ChatGPT, Codex, Claude, Grok and other MCP clients. Copy a setup prompt, complete browser consent, and optionally install the downloadable skill/local plugin. Each app receives its own workspace-bound read/capture identity with expiry and revocation. [AI connection setup and operations](docs/AI_CONNECTIONS.md) covers OAuth, advanced tokens, migration `003_ai_connections.sql`, client limitations and rollback.
 
 ## First content workflow
 

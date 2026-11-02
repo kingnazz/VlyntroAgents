@@ -7,6 +7,7 @@ export default tseslint.config(
       '**/node_modules/**',
       'test-results/**',
       'playwright-report/**',
+      'output/playwright/**',
       'apps/web/next-env.d.ts',
     ],
   },

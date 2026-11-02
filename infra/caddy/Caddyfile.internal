@@ -5,7 +5,7 @@
     Referrer-Policy same-origin
     -Server
   }
-  @api path /api/* /mcp /events/*
+  @api path /api/* /mcp /events/* /oauth/* /.well-known/oauth-*
   handle @api {
     reverse_proxy api:4000 {
       flush_interval -1

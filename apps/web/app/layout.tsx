@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { manrope, parkinsans } from '../src/brand/fonts';
 import './globals.css';
+import '../src/connections.css';
 export const metadata: Metadata = {
   metadataBase: new URL('https://agents.vlyntro.com'),
   title: 'Vlyntro Agents | One Workspace for Your AI Team',

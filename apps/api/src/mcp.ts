@@ -30,6 +30,7 @@ import {
   searchInput,
   captureInput,
 } from '../../../packages/shared/src/brain/schemas.js';
+import { connectionForActor } from '../../../packages/shared/src/connections.js';
 export async function registerMcp(app: FastifyInstance) {
   app.post('/mcp', async (req, reply) => {
     if (
@@ -38,19 +39,65 @@ export async function registerMcp(app: FastifyInstance) {
     )
       fail(401, 'bearer_required', 'MCP requires an agent bearer token.');
     const actor = req.actor;
-    const server = new McpServer({
-      name: 'vlyntro-agent-hq',
-      version: '1.0.0',
-    });
+    const connection = await connectionForActor(actor);
+    const brainTools = new Set([
+      'search_brain',
+      'read_brain_item',
+      'capture_brain_item',
+      'list_projects',
+      'get_project',
+      'list_people',
+      'get_person',
+      'list_decisions',
+      'get_brain_connection',
+    ]);
+    const server = new McpServer(
+      {
+        name: 'vlyntro-agent-hq',
+        version: '1.0.0',
+      },
+      {
+        instructions: connection
+          ? `You are connected to Vlyntro Brain as ${connection.label}. Your workspace is ${connection.workspace_id}; workspace_id may be omitted. Use search_brain and read_brain_item for relevant attributed context. Capture is available only when granted. A raw capture may still need processing or human review. Preserve human versus agent provenance and do not save hidden reasoning or secrets. Use get_brain_connection to verify identity and access.`
+          : undefined,
+      },
+    );
     const register = (
       name: string,
       shape: z.ZodRawShape,
       run: (args: Record<string, unknown>) => Promise<unknown>,
-    ) =>
-      server.registerTool(name, { inputSchema: shape }, async (args) => {
+    ) => {
+      if (
+        connection &&
+        (!brainTools.has(name) ||
+          (name === 'capture_brain_item' &&
+            !connection.scopes.includes('brain.propose')))
+      )
+        return;
+      const inputShape =
+        connection && 'workspace_id' in shape
+          ? { ...shape, workspace_id: z.uuid().optional() }
+          : shape;
+      server.registerTool(name, { inputSchema: inputShape }, async (args) => {
         try {
+          if (
+            connection &&
+            args.workspace_id &&
+            args.workspace_id !== connection.workspace_id
+          )
+            fail(
+              403,
+              'workspace_mismatch',
+              'This connection is bound to a different workspace.',
+            );
+          const scopedArgs =
+            connection && 'workspace_id' in shape
+              ? { ...args, workspace_id: connection.workspace_id }
+              : args;
           return {
-            content: [{ type: 'text', text: JSON.stringify(await run(args)) }],
+            content: [
+              { type: 'text', text: JSON.stringify(await run(scopedArgs)) },
+            ],
           };
         } catch (error) {
           return {
@@ -72,6 +119,16 @@ export async function registerMcp(app: FastifyInstance) {
           };
         }
       });
+    };
+    if (connection)
+      register('get_brain_connection', {}, async () => ({
+        identity: connection.label,
+        client_kind: connection.client_kind,
+        workspace_id: connection.workspace_id,
+        access: connection.scopes.filter((s: string) => s !== 'offline_access'),
+        expires_at: connection.expires_at,
+        connected: true,
+      }));
     register('read_state', { namespace: identifier, key: identifier }, (a) =>
       readState(actor, String(a.namespace), String(a.key)),
     );
@@ -190,6 +247,9 @@ export async function registerMcp(app: FastifyInstance) {
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
+    // Hijacking bypasses Fastify's onSend path; retain security and CORS headers.
+    for (const [name, value] of Object.entries(reply.getHeaders()))
+      if (value !== undefined) reply.raw.setHeader(name, value);
     reply.hijack();
     reply.raw.on('close', () => {
       void transport.close();

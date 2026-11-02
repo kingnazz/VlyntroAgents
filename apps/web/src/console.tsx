@@ -26,6 +26,7 @@ import { TaskTable } from './components/task-table';
 import { AgentCard } from './components/agent-card';
 import { CommandCenter } from './views/command-center';
 import { BrainViews } from './views/brain';
+import { Connections } from './views/connections';
 import { BrainActionsProvider } from './components/brain-actions';
 type Data = {
   user: User;
@@ -70,6 +71,7 @@ const titles: Record<string, string> = {
   artifacts: 'Artifacts',
   activity: 'Activity',
   settings: 'Settings',
+  connections: 'Connect your AI',
   agents: 'Agents',
   blackboard: 'Blackboard',
 };
@@ -335,6 +337,13 @@ export default function Console() {
                     connected={connected}
                     onNavigate={navigate}
                     onNewTask={() => setNewTask(true)}
+                  />
+                )}
+                {screen === 'connections' && (
+                  <Connections
+                    key={workspaceId}
+                    workspaceId={workspaceId}
+                    canManage={['owner', 'admin'].includes(data.user.role)}
                   />
                 )}
                 {screen === 'channel' && currentChannel && (
@@ -607,6 +616,17 @@ export default function Console() {
                     </Panel>
                     <Panel title="Agent connections">
                       <div className="settings-row">
+                        <span>
+                          Connect ChatGPT, Claude, Codex, Grok and other AI apps
+                        </span>
+                        <button
+                          className="primary"
+                          onClick={() => navigate('connections')}
+                        >
+                          Connect your AI
+                        </button>
+                      </div>
+                      <div className="settings-row">
                         <span>MCP endpoint</span>
                         <code>
                           {typeof window !== 'undefined'
@@ -618,9 +638,9 @@ export default function Console() {
                       </div>
                       <div className="settings-row">
                         <span>Authentication</span>
-                        <span>Scoped agent bearer token</span>
+                        <span>Scoped OAuth or access token</span>
                         <span className="muted">
-                          Created through the admin CLI
+                          Managed in Connect your AI
                         </span>
                       </div>
                       <div className="settings-row">

@@ -89,6 +89,8 @@ The restore script requires a new `hq_restore_*` database. Never substitute the 
 
 ## Agent operations
 
+External AI apps are managed through **Connect your AI**, separately from the operational worker agents below. See [AI connections](AI_CONNECTIONS.md) for OAuth discovery, consent, credential expiry/revocation, migration 003 and the required Caddy route reload. Revoke connection credentials before rolling back to application code predating migration 003, because old authentication does not understand their expiry/resource fields.
+
 Create/rotate/revoke tokens with `dc exec api pnpm agent:token:create chatgpt`, `dc exec api pnpm agent:token:rotate chatgpt` or `dc exec api pnpm agent:token:revoke chatgpt`. Tokens are displayed once. Store them directly in the client secret store; never paste them into logs or Git.
 
 Disable an agent from its dashboard profile. The server cancels queued/waiting work and rejects its tokens while disabled. Active execution is bounded and must finish before deployment changes. Agent model identifiers can be changed through the owner/admin `PATCH /api/v1/agents/:id` endpoint. Environment model variables affect initial seed only, so reseeding does not overwrite an operator's model choice.

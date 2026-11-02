@@ -24,18 +24,21 @@
   "dependencies": {
     "@fastify/cookie": "latest",
     "@fastify/helmet": "latest",
+    "@fastify/middie": "9.3.6",
     "@fastify/rate-limit": "latest",
     "@modelcontextprotocol/sdk": "1.32.2",
     "argon2": "latest",
     "dotenv": "latest",
+    "express": "5.3.0",
     "fastify": "5.12.7",
     "postgres": "latest",
-    "zod": "latest",
-    "tsx": "latest"
+    "tsx": "latest",
+    "zod": "latest"
   },
   "devDependencies": {
     "@eslint/js": "latest",
     "@playwright/test": "latest",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
     "concurrently": "latest",
     "embedded-postgres": "16.4.0-beta.13",

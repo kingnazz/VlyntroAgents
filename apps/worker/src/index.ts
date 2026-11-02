@@ -19,7 +19,7 @@ async function heartbeat() {
   await sql`INSERT INTO worker_heartbeats(id) VALUES(${id}) ON CONFLICT(id) DO UPDATE SET last_seen_at=now()`;
   await sql`DELETE FROM worker_heartbeats WHERE last_seen_at<now()-interval '1 day'`;
   const agents =
-    await sql`SELECT * FROM agents WHERE status NOT IN ('busy','disabled')`;
+    await sql`SELECT * FROM agents WHERE status NOT IN ('busy','disabled') AND NOT EXISTS(SELECT 1 FROM ai_connections WHERE agent_id=agents.id)`;
   for (const agent of agents) {
     const configured = await isConfigured(agent as unknown as AgentConfig);
     const status = configured

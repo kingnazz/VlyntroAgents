@@ -5,7 +5,12 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     cache: 'no-store',
   });
   if (response.status === 401) {
-    window.location.assign('/login');
+    window.location.assign(
+      '/login?next=' +
+        encodeURIComponent(
+          safeLoginNext(window.location.pathname + window.location.search),
+        ),
+    );
     throw new Error('Session expired.');
   }
   const result = await response.json();
@@ -28,3 +33,4 @@ export const date = (value: string) =>
     hour: '2-digit',
     minute: '2-digit',
   });
+import { safeLoginNext } from './login-next';
