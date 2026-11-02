@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { ArrowUpRight, LockKeyhole } from 'lucide-react';
 import { Brand } from './brand/BrandLockup';
 import { Mascot } from './brand/Mascot';
-export default function Login() {
+export default function Login({ next = '/app' }: { next?: string }) {
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -25,7 +25,7 @@ export default function Login() {
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.error?.message ?? 'Sign in failed.');
-      window.location.assign('/app');
+      window.location.assign(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Connection unavailable.');
     } finally {

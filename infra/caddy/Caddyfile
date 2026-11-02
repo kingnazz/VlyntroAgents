@@ -6,7 +6,7 @@
     Strict-Transport-Security "max-age=31536000"
     -Server
   }
-  @api path /api/* /mcp /events/*
+  @api path /api/* /mcp /events/* /oauth/* /.well-known/oauth-*
   handle @api {
     reverse_proxy api:4000 { flush_interval -1 }
   }

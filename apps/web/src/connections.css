@@ -1,0 +1,239 @@
+.connections-view {
+  max-width: 1100px;
+}
+.connection-panel > :not(.panel-heading) {
+  margin-left: 22px;
+  margin-right: 22px;
+}
+.connection-panel > :last-child {
+  margin-bottom: 22px;
+}
+.connection-panel > .connection-clients {
+  margin-top: 20px;
+}
+.connection-steps {
+  list-style: decimal;
+}
+.connection-clients {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.connection-client {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 64px;
+  padding: 14px;
+  border: 1px solid var(--border, #ddd8cf);
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+}
+.connection-client span {
+  flex: 1;
+}
+.connection-client.selected {
+  background: #f0f5e9;
+  border-color: #6b8255;
+}
+.connection-guide {
+  display: grid;
+  gap: 20px;
+  margin-top: 26px;
+}
+.connection-guide h3,
+.connection-record h3 {
+  margin: 0 0 8px;
+}
+.connection-guide p,
+.connection-downloads p {
+  margin: 6px 0;
+}
+.connection-copy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #f5f1e9;
+  border: 1px solid #e2dcd2;
+  padding: 14px;
+  border-radius: 10px;
+}
+.connection-copy code {
+  flex: 1;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  font-size: 13px;
+}
+.connection-steps {
+  margin: 0;
+  padding-left: 24px;
+  display: grid;
+  gap: 12px;
+  line-height: 1.65;
+}
+.connection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.connection-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.connection-prompt {
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  padding: 16px;
+  background: #f5f1e9;
+  border-radius: 10px;
+}
+.connection-downloads {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-top: 1px solid #e2dcd2;
+  padding-top: 20px;
+}
+.connection-downloads > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.connection-downloads .connection-actions {
+  margin-top: 12px;
+}
+.connection-list-header,
+.connection-record {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.connection-record {
+  border-top: 1px solid #e2dcd2;
+  padding: 20px 0;
+}
+.connection-record > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.connection-record p {
+  margin: 7px 0;
+}
+.connection-state {
+  font-size: 12px;
+  color: #4c6538;
+  font-weight: 600;
+}
+.connection-advanced {
+  padding: 22px;
+  border: 1px solid #ddd8cf;
+  border-radius: 14px;
+  margin-top: 24px;
+}
+.connections-view summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.connection-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+}
+.connection-form label,
+.connection-secret label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.connection-form input:not([type='checkbox']),
+.connection-form select,
+.connection-secret input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d6d0c6;
+  border-radius: 8px;
+  padding: 12px;
+  color: inherit;
+  background: #fffdf9;
+  font: inherit;
+}
+.connection-form > button {
+  justify-self: start;
+}
+.connection-secret {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid #a4b68e;
+  border-radius: 14px;
+  background: #f1f5ec;
+}
+.connection-secret .connection-actions {
+  margin-top: 15px;
+}
+.connection-notice {
+  border-left: 3px solid #6b8255;
+  background: #f1f5ec;
+  padding: 15px;
+}
+.consent-shell {
+  min-height: 100vh;
+  max-width: 690px;
+  margin: auto;
+  padding: 40px 22px;
+}
+.consent-shell > a {
+  display: inline-block;
+  margin-bottom: 36px;
+}
+.consent-panel {
+  padding: 30px;
+  border-radius: 18px;
+  background: #fffdf9;
+  border: 1px solid #e2dcd2;
+}
+.consent-panel h1 {
+  font-size: 32px;
+  margin: 20px 0;
+}
+.consent-callback {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 15px;
+  background: #f5f1e9;
+  border-radius: 8px;
+}
+.consent-permissions {
+  border-top: 1px solid #e2dcd2;
+  border-bottom: 1px solid #e2dcd2;
+  padding: 20px 0;
+}
+.connection-form .consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.consent-check input {
+  margin-top: 5px;
+  accent-color: #56723e;
+}
+@media (max-width: 680px) {
+  .connection-clients {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .connection-copy {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .consent-panel {
+    padding: 22px;
+  }
+}

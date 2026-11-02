@@ -4,7 +4,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/app', '/login', '/api/', '/mcp'],
+      disallow: ['/app', '/login', '/connect', '/oauth/', '/api/', '/mcp'],
     },
     sitemap: 'https://agents.vlyntro.com/sitemap.xml',
   };

@@ -83,6 +83,8 @@ export type Actor = {
   slug?: string;
   tokenId?: string;
   sessionId?: string;
+  connectionId?: string;
+  oauthResource?: string;
 };
 export class AppError extends Error {
   constructor(

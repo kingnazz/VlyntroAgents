@@ -17,6 +17,12 @@ try {
     const [agent] =
       await tx`SELECT id FROM agents WHERE slug=${slug} FOR UPDATE`;
     if (!agent) throw new Error('Agent not found');
+    if (
+      (await tx`SELECT 1 FROM ai_connections WHERE agent_id=${agent.id}`).length
+    )
+      throw new Error(
+        'Manage external AI credentials in Connect your AI; this CLI is for operational agents.',
+      );
     if (action === 'rotate' || action === 'revoke')
       await tx`UPDATE agent_tokens SET revoked_at=now() WHERE agent_id=${agent.id} AND revoked_at IS NULL`;
     if (action !== 'revoke')
