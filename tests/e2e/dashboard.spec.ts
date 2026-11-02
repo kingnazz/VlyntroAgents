@@ -35,11 +35,9 @@ test('private dashboard, live message, navigation and responsive layout', async 
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Enter workspace' }).click();
   await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole('heading', { name: 'Today.' })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Command Center.' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Agent roster' }),
+    page.getByRole('heading', { name: 'Your agents' }),
   ).toBeVisible();
   const menu = async () => {
     const button = page.getByRole('button', { name: 'Open navigation' });

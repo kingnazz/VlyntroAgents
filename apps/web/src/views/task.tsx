@@ -11,6 +11,7 @@ import {
 import { RunTable } from '../components/run-table';
 import { ArtifactCard } from '../components/artifact-card';
 import { EventList } from '../components/activity-list';
+import { SaveToBrain } from '../components/brain-actions';
 
 export function TaskView({
   id,
@@ -68,6 +69,16 @@ export function TaskView({
         </p>
       )}
       <Panel title="Task details">
+        <div className="brain-margin">
+          <SaveToBrain
+            source={{
+              type: 'task',
+              id: task.id,
+              title: task.title,
+              body: task.description || task.title,
+            }}
+          />
+        </div>
         <div className="settings-row">
           <span>Assigned agent</span>
           <span>

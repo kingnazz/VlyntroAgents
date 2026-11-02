@@ -42,6 +42,14 @@ Run `COMPOSE_PARALLEL_LIMIT=1 dc build web`, then `dc up -d --no-deps --wait web
 
 For a frontend-only rollback, restore the previous `WEB_IMAGE_TAG` and run `dc up -d --no-deps --wait web`. Keep both web images until the new release is verified.
 
+## Second Brain releases
+
+Follow [Second Brain V1](SECOND_BRAIN.md). Migration `002_second_brain.sql` adds eight tables and workspace-scoped grants; leave `001_initial.sql` unchanged. Before migration, run the existing backup, check the printed path with `test -s`, record its size, and record existing table counts and app/other-service container IDs. Apply the migration using the newly built runtime image. Recreate only `api`, `worker`, and `web`; leave PostgreSQL, routing and unrelated projects intact. Verify existing data counts, health, login, Today, every Brain view, capture/search, Messages, Tasks, Approvals, Runs, Blackboard, MCP and SSE. A harmless owner architecture decision must survive an Agent HQ restart and appear in the next backup/restore validation.
+
+Pending captures remain usable without provider keys. Failed processing appears in Brain Inbox with a safe error. Retry after fixing provider configuration; do not overwrite raw text. Ambiguous people require **Resolve match**. Incorrect memory should be edited with a reason or superseded from its detail view; source and revisions remain available. Secret-like captures are held for human review and cannot be retried into a provider. Only a redacted manual memory should be saved from those records.
+
+All Brain data is in the existing database dump; no new volume or backup job is needed. Retain the previous runtime/web image tags for rollback against the additive schema. Do not delete Brain tables or migration records during an application rollback.
+
 ## Roll back
 
 Use an existing reviewed previous commit and its immutable image tag. Recreate only app services against compatible migrations. Database migrations are forward-only and checked. If a schema rollback is needed, stop Agent HQ writers, restore a backup to a new database, verify it, and plan a DATABASE_URL cutover. Never restore over the active data volume. Keep the failed release available for diagnosis and do not reset unrelated work.

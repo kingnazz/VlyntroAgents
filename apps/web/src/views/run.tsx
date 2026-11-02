@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { api, date } from '../api';
 import type { Run, Agent } from '../types';
+import { SaveToBrain } from '../components/brain-actions';
 import {
   PageHeader as PageHeading,
   StatusBadge as Badge,
@@ -49,6 +50,16 @@ export function RunView({ id, agents }: { id: string; agents: Agent[] }) {
         action={<Badge status={run.status} />}
       />
       <Panel title="Execution summary">
+        <div className="brain-margin">
+          <SaveToBrain
+            source={{
+              type: 'run',
+              id: run.id,
+              title: 'Run outcome ' + id.slice(0, 8),
+              body: run.output_summary || run.error || run.input_summary,
+            }}
+          />
+        </div>
         <p className="panel-note">
           {run.output_summary || run.error || 'Agent is working.'}
         </p>

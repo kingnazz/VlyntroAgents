@@ -14,6 +14,12 @@ import {
   Zap,
   ChevronsUpDown,
   X,
+  Brain,
+  CalendarDays,
+  Folder,
+  Users,
+  Inbox,
+  GitBranch,
 } from 'lucide-react';
 import { Brand } from '../brand/BrandLockup';
 import type { Agent, Channel, User, Workspace } from '../types';
@@ -167,8 +173,16 @@ export function Sidebar({
           <ChevronsUpDown size={13} />
         </label>
         <nav>
-          <div className="nav-section">COMMAND</div>
+          <div className="nav-section">TODAY</div>
+          {nav('today', 'Today', <CalendarDays size={17} />)}
           {nav('overview', 'Command Center', <Command size={17} />)}
+          <div className="nav-section">BRAIN</div>
+          {nav('memory', 'Memory', <Brain size={17} />)}
+          {nav('projects', 'Projects', <Folder size={17} />)}
+          {nav('people', 'People', <Users size={17} />)}
+          {nav('decisions', 'Decisions', <GitBranch size={17} />)}
+          {user.role !== 'viewer' &&
+            nav('inbox', 'Brain Inbox', <Inbox size={17} />)}
           <div className="nav-section">MESSAGES</div>
           {channels.map((c) =>
             nav('channel', c.name, <Hash size={17} />, c.id),
@@ -200,8 +214,8 @@ export function Sidebar({
           )}
           {nav('runs', 'Runs', <Zap size={17} />)}
           {nav('artifacts', 'Artifacts', <FileText size={17} />)}
-          {nav('blackboard', 'Blackboard', <Layers3 size={17} />)}
           <div className="nav-section">SYSTEM</div>
+          {nav('blackboard', 'Blackboard', <Layers3 size={17} />)}
           {nav('activity', 'Activity', <Activity size={17} />)}
           {nav('settings', 'Settings', <Settings2 size={17} />)}
         </nav>

@@ -2,6 +2,7 @@ import { ArrowUpRight, ListTodo, Zap } from 'lucide-react';
 import { time } from '../api';
 import type { Message } from '../types';
 import { AgentAvatar } from './ui';
+import { SaveToBrain } from './brain-actions';
 export function MessageItem({
   message: m,
   name,
@@ -65,6 +66,14 @@ export function MessageItem({
             <ArrowUpRight size={12} />
           </a>
         )}
+        <SaveToBrain
+          source={{
+            type: 'message',
+            id: m.id,
+            title: m.body.slice(0, 120),
+            body: m.body,
+          }}
+        />
       </div>
     </article>
   );

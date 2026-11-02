@@ -49,6 +49,9 @@ export async function seed() {
       if (slug !== 'system')
         for (const permission of [
           'workspace.read',
+          'brain.read',
+          'brain.propose',
+          ...(slug !== 'grokbot' ? ['brain.write'] : []),
           'messages.read',
           'messages.write',
           'tasks.read',

@@ -2,6 +2,7 @@
 import { FileText } from 'lucide-react';
 import { date } from '../api';
 import type { Artifact } from '../types';
+import { SaveToBrain } from './brain-actions';
 
 export function ArtifactCard({ artifact: a }: { artifact: Artifact }) {
   return (
@@ -18,6 +19,14 @@ export function ArtifactCard({ artifact: a }: { artifact: Artifact }) {
           ) : (
             <pre>{a.content_text}</pre>
           ))}
+        <SaveToBrain
+          source={{
+            type: 'artifact',
+            id: a.id,
+            title: a.name,
+            body: a.content_text ?? a.name,
+          }}
+        />
       </div>
     </article>
   );

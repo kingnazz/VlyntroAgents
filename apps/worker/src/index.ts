@@ -6,8 +6,11 @@ import {
 } from '../../../packages/shared/src/providers.js';
 import { claimJob, recoverJobs } from './queue.js';
 import { executeJob } from './execute.js';
+import { processCapture } from '../../../packages/shared/src/brain/capture.js';
 const id = 'worker-' + randomUUID();
 let stopping = false;
+let processingCapture = false;
+let lastCapturePoll = 0;
 for (const signal of ['SIGTERM', 'SIGINT'])
   process.on(signal, () => {
     stopping = true;
@@ -60,7 +63,31 @@ while (!stopping) {
         } finally {
           await connection`SELECT pg_advisory_unlock(hashtextextended(${job.id},17))`;
         }
-      } else await new Promise((resolve) => setTimeout(resolve, 750));
+      } else {
+        if (!processingCapture && Date.now() - lastCapturePoll > 10000) {
+          lastCapturePoll = Date.now();
+          const [capture] =
+            await sql`SELECT c.id FROM capture_inbox c WHERE c.sensitive=false AND (c.status='new' OR (c.status='processing' AND c.created_at<now()-interval '2 minutes'))
+            AND EXISTS(SELECT 1 FROM agents a WHERE a.agent_type='llm' AND a.status<>'disabled' AND a.configuration->>'configured'='true'
+            AND NOT EXISTS(SELECT 1 FROM (VALUES ('brain.read'),('brain.write'),('brain.propose'),('tasks.write')) needed(permission) WHERE NOT EXISTS(SELECT 1 FROM agent_permissions p WHERE p.agent_id=a.id AND p.workspace_id=c.workspace_id AND p.namespace_id IS NULL AND p.permission=needed.permission))) ORDER BY c.created_at LIMIT 1`;
+          if (capture) {
+            processingCapture = true;
+            void processCapture(capture.id)
+              .catch(() =>
+                console.error(
+                  JSON.stringify({
+                    level: 'error',
+                    event: 'brain.capture.failed',
+                  }),
+                ),
+              )
+              .finally(() => {
+                processingCapture = false;
+              });
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
     } finally {
       connection.release();
     }
@@ -75,6 +102,8 @@ while (!stopping) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
+while (processingCapture)
+  await new Promise((resolve) => setTimeout(resolve, 100));
 clearInterval(timer);
 await sql`DELETE FROM worker_heartbeats WHERE id=${id}`;
 await sql.end();

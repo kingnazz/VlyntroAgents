@@ -1,3 +1,4 @@
+import { registerBrainRoutes, brainQuerySchema } from './brain.js';
 import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -161,18 +162,19 @@ export async function buildApp(logging = false) {
     if (body) modelSchemas[bodyName] = toOpenapiSchema(body, bodyName, 'input');
     const querySchema =
       method === 'GET'
-        ? url.endsWith('/events')
-          ? eventFilter
-          : [
-                '/api/v1/tasks',
-                '/api/v1/runs',
-                '/api/v1/approvals',
-                '/api/v1/artifacts',
-              ].includes(url)
-            ? listFilter
-            : url.endsWith('/messages') || url.endsWith('/channels')
-              ? page
-              : null
+        ? (brainQuerySchema(url) ??
+          (url.endsWith('/events')
+            ? eventFilter
+            : [
+                  '/api/v1/tasks',
+                  '/api/v1/runs',
+                  '/api/v1/approvals',
+                  '/api/v1/artifacts',
+                ].includes(url)
+              ? listFilter
+              : url.endsWith('/messages') || url.endsWith('/channels')
+                ? page
+                : null))
         : null;
     if (querySchema) {
       const schema = z.toJSONSchema(querySchema);
@@ -264,6 +266,15 @@ export async function buildApp(logging = false) {
   });
   app.addHook('onRequest', async (req, reply) => {
     reply.header('X-Request-ID', req.id);
+    if (
+      [
+        '/api/v1/brain/',
+        '/api/v1/projects',
+        '/api/v1/people',
+        '/api/v1/organizations',
+      ].some((path) => req.url.startsWith(path))
+    )
+      reply.header('Cache-Control', 'private, no-store');
     if (req.headers.origin && req.headers.origin !== base)
       fail(403, 'invalid_origin', 'Cross-origin requests are not accepted.');
     const publicRoute = [
@@ -881,6 +892,7 @@ export async function buildApp(logging = false) {
     undefined,
     true,
   );
+  registerBrainRoutes(route);
   await registerMcp(app);
   return app;
 }

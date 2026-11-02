@@ -42,9 +42,7 @@ test('public homepage, protected app, session redirects and logout', async ({
     .fill(process.env.E2E_PASSWORD ?? process.env.ADMIN_PASSWORD!);
   await page.getByRole('button', { name: 'Enter workspace' }).click();
   await expect(page).toHaveURL(/\/app$/);
-  await expect(
-    page.getByRole('heading', { name: 'Command Center.' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Today.' })).toBeVisible();
   const authenticatedApp = await context.request.get('/app', {
     maxRedirects: 0,
   });

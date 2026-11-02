@@ -1,0 +1,117 @@
+import type { Task, Approval, Run, Artifact, Message, Event } from './types';
+export type BrainLink = {
+  channel_id?: string;
+  target_type: string;
+  target_id: string;
+  relation: string;
+  title?: string;
+};
+export type Memory = {
+  id: string;
+  workspace_id: string;
+  kind: string;
+  title: string;
+  body: string;
+  summary: string | null;
+  status: string;
+  importance: string;
+  created_at: string;
+  occurred_at: string | null;
+  created_by_type: string;
+  created_by_id: string;
+  author_name: string;
+  source_type: string;
+  source_attribution?: { type: string; id: string; name: string } | null;
+  source_id: string | null;
+  revision_number: number;
+  supersedes_id: string | null;
+  metadata: Record<string, unknown>;
+  links: BrainLink[];
+  source?: {
+    id: string;
+    raw_text: string;
+    captured_by_type: string;
+    captured_by_id: string;
+    created_at: string;
+  } | null;
+};
+export type Entity = {
+  open_tasks?: number;
+  related_people?: string[];
+  latest_decision?: string | null;
+  latest_memory?: string | null;
+  recent_agents?: string[];
+  last_activity?: string;
+  id: string;
+  name?: string;
+  display_name?: string;
+  description?: string;
+  summary?: string;
+  status?: string;
+  email?: string;
+  phone?: string;
+  title?: string;
+  organization_name?: string;
+  notes?: string;
+  domain?: string;
+  updated_at: string;
+  metadata?: Record<string, unknown>;
+  memories?: Memory[];
+  decisions?: Memory[];
+  people?: Entity[];
+  projects?: Entity[];
+  organizations?: Entity[];
+  tasks?: Task[];
+  messages?: Message[];
+  artifacts?: Artifact[];
+  runs?: Run[];
+  activity?: Event[];
+  relationships?: {
+    id: string;
+    from_type: string;
+    from_id: string;
+    to_type: string;
+    to_id: string;
+    relation: string;
+  }[];
+};
+export type Capture = {
+  id: string;
+  raw_text: string;
+  excerpt?: string;
+  status: string;
+  author_name: string;
+  created_at: string;
+  processing_error: string | null;
+  sensitive: boolean;
+  processed_at: string | null;
+  parsed_result: {
+    suggestions?: {
+      resolved_id?: string;
+      type: string;
+      fields: Record<string, string>;
+      reason: string;
+    }[];
+    memory_ids?: string[];
+    task_ids?: string[];
+    entities?: { type: string; id: string; name: string }[];
+  } | null;
+};
+export type BrainSearch = {
+  items: Memory[];
+  projects: Entity[];
+  people: Entity[];
+  organizations: Entity[];
+  next_cursor: number | null;
+};
+export type TodayData = {
+  approvals: Approval[];
+  inbox_count: number;
+  follow_ups: Task[];
+  working: Run[];
+  completed: Task[];
+  memories: Memory[];
+  decisions: Memory[];
+  captures: Capture[];
+  projects: Entity[];
+};

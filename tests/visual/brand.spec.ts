@@ -38,9 +38,7 @@ test('Vlyntro brand and every workspace view at five widths', async ({
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Enter workspace' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Command Center.' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Today.' })).toBeVisible();
   const agents = await (await context.request.get('/api/v1/agents')).json();
   const channels = await (
     await context.request.get('/api/v1/workspaces/vlyntro/channels')

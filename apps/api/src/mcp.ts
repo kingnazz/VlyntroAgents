@@ -21,6 +21,15 @@ import {
 } from '../../../packages/shared/src/work.js';
 import { requestApproval } from '../../../packages/shared/src/approvals.js';
 import { queryEvents } from './app.js';
+import { searchBrain } from '../../../packages/shared/src/brain/retrieval.js';
+import { readMemory } from '../../../packages/shared/src/brain/items.js';
+import { captureBrain } from '../../../packages/shared/src/brain/capture.js';
+import { listEntities } from '../../../packages/shared/src/brain/entities.js';
+import { entityDetail } from '../../../packages/shared/src/brain/overview.js';
+import {
+  searchInput,
+  captureInput,
+} from '../../../packages/shared/src/brain/schemas.js';
 export async function registerMcp(app: FastifyInstance) {
   app.post('/mcp', async (req, reply) => {
     if (
@@ -153,6 +162,29 @@ export async function registerMcp(app: FastifyInstance) {
       'request_approval',
       approvalInput.omit({ requested_by_agent_id: true }).shape,
       (a) => requestApproval(actor, a),
+    );
+    register('search_brain', searchInput.shape, (a) => searchBrain(actor, a));
+    register('read_brain_item', { workspace_id: z.uuid(), id: z.uuid() }, (a) =>
+      readMemory(actor, String(a.workspace_id), String(a.id)),
+    );
+    register('capture_brain_item', captureInput.shape, (a) =>
+      captureBrain(actor, a),
+    );
+    for (const [type, plural] of [
+      ['project', 'projects'],
+      ['person', 'people'],
+    ] as const) {
+      register(
+        'list_' + plural,
+        { workspace_id: z.uuid(), q: z.string().max(500).default('') },
+        (a) => listEntities(actor, type, String(a.workspace_id), String(a.q)),
+      );
+      register('get_' + type, { workspace_id: z.uuid(), id: z.uuid() }, (a) =>
+        entityDetail(actor, type, String(a.workspace_id), String(a.id)),
+      );
+    }
+    register('list_decisions', searchInput.omit({ kind: true }).shape, (a) =>
+      searchBrain(actor, { ...a, kind: 'decision' }),
     );
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
